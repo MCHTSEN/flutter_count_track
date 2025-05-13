@@ -8,7 +8,7 @@ Projenizin "Paketleme Takip Sistemi" için özellik modüllerine ait detaylı ya
     - [ ] **UI:** "Excel İçe Aktar" butonu oluştur.
     - [ ] **İşlevsellik:** Butona tıklandığında dosya seçici açılacak (file\_picker vb.).
     - [ ] **Servis/Repository:**
-        - [ ] Excel okuma servisi (syncfusion\_flutter\_xlsio veya excel ile) oluştur.
+        - [ ] Excel okuma servisi (excel ile) oluştur.
         - [ ] Servis, seçilen Excel dosyasını okuyacak.
         - [ ] Gerekli sütunları (Sipariş Kodu, Müşteri Adı, Müşteri Ürün Kodu, Ürün Miktarı) parse et.
         - [ ] Okunan verileri geçici `Order` ve `OrderItem` model nesnelerine dönüştür.
@@ -20,12 +20,12 @@ Projenizin "Paketleme Takip Sistemi" için özellik modüllerine ait detaylı ya
     - [ ] **UI Geri Bildirimi:** İçe aktarma sonucunu kullanıcıya göster (örn: Snackbar, Toast).
     - [ ] **Hata Yönetimi:** Geçersiz dosya formatı, eksik sütun gibi hataları yakalayıp kullanıcıya bildir.
 
-- [ ] **F1.2: İçe Aktarılan Siparişleri Listeleme**
-    - [ ] **UI Ekranı:** `OrderListScreen` adında yeni bir ekran oluştur.
-    - [ ] **Veritabanı (DAO/Repository):** Tüm `Order` kayıtlarını (gerekli alanlarla: durum, tarih vb.) getirecek bir fonksiyon yaz.
-    - [ ] **ViewModel/Notifier:** Sipariş listesini (Riverpod `FutureProvider` veya `StateNotifierProvider` ile) UI'a sağla.
-    - [ ] **UI Widget (Liste Elemanı):** Her bir sipariş için Sipariş Kodu, Müşteri Adı, Durum, Tarih bilgilerini gösterecek `OrderListItemWidget` oluştur.
-    - [ ] **UI Widget (Liste):** `ListView.builder` ile `OrderListItemWidget`'lar kullanılarak sipariş listesi oluştur.
+- [x] **F1.2: İçe Aktarılan Siparişleri Listeleme**
+    - [x] **UI Ekranı:** `OrderListScreen` adında yeni bir ekran oluştur.
+    - [x] **Veritabanı (DAO/Repository):** Tüm `Order` kayıtlarını (gerekli alanlarla: durum, tarih vb.) getirecek bir fonksiyon yaz.
+    - [x] **ViewModel/Notifier:** Sipariş listesini (Riverpod `FutureProvider` veya `StateNotifierProvider` ile) UI'a sağla.
+    - [x] **UI Widget (Liste Elemanı):** Her bir sipariş için Sipariş Kodu, Müşteri Adı, Durum, Tarih bilgilerini gösterecek `OrderListItemWidget` oluştur.
+    - [x] **UI Widget (Liste):** `ListView.builder` ile `OrderListItemWidget`'lar kullanılarak sipariş listesi oluştur.
     - [ ] **Navigasyon:** Bir `OrderListItemWidget`'a tıklandığında `OrderDetailScreen`'e (ilgili `orderId` ile) yönlendirme yap.
 
 - [ ] **F1.3: Sipariş Detaylarını Görüntüleme**
@@ -37,26 +37,26 @@ Projenizin "Paketleme Takip Sistemi" için özellik modüllerine ait detaylı ya
     - [ ] **UI:** Siparişin genel bilgilerini (kod, müşteri, tarih, durum) ekranda göster.
     - [ ] **UI (Ürün Tablosu/Listesi):** Siparişteki ürünleri (Müşteri Ürün Kodu, Bizim Ürün Kodumuz, İstenen Miktar, Okunan Miktar, Kalan Miktar, İlerleme Barı) bir tablo veya liste yapısında göster.
 
-- [ ] **F1.4: Sipariş Durumunu Gösterme ve Otomatik Güncelleme**
-    - [ ] **UI:** Sipariş listesinde ve detay ekranında sipariş durumunu (Bekliyor, Kısmen Gönderildi, Tamamlandı) ikon veya renk ile görselleştir.
-    - [ ] **Model (Order):** `status` alanı için bir enum (`OrderStatus`) veya sabit string değerleri tanımla.
-    - [ ] **İş Mantığı (ViewModel/Servis):**
-        - [ ] Bir siparişteki tüm `OrderItem`'ların `scannedQuantity` değerleri `quantity` değerlerine ulaştığında `Order.status` "Tamamlandı" olarak güncelle.
-        - [ ] Kısmi sevkiyat yapıldığında ve sipariş tamamlanmadığında `Order.status` "Kısmen Gönderildi" olarak güncelle (F3.2 ile koordineli).
-        - [ ] Yeni siparişlerin varsayılan durumunu "Bekliyor" olarak ayarla.
-    - [ ] **Veritabanı (DAO/Repository):** `Order` tablosundaki `status` alanını güncelleyecek fonksiyon yaz.
+- [x] **F1.4: Sipariş Durumunu Gösterme ve Otomatik Güncelleme**
+    - [x] **UI:** Sipariş listesinde ve detay ekranında sipariş durumunu (Bekliyor, Kısmen Gönderildi, Tamamlandı) ikon veya renk ile görselleştir.
+    - [x] **Model (Order):** `status` alanı için bir enum (`OrderStatus`) veya sabit string değerleri tanımla.
+    - [x] **İş Mantığı (ViewModel/Servis):**
+        - [x] Bir siparişteki tüm `OrderItem`'ların `scannedQuantity` değerleri `quantity` değerlerine ulaştığında `Order.status` "Tamamlandı" olarak güncelle.
+        - [x] Kısmi sevkiyat yapıldığında ve sipariş tamamlanmadığında `Order.status` "Kısmen Gönderildi" olarak güncelle (F3.2 ile koordineli).
+        - [x] Yeni siparişlerin varsayılan durumunu "Bekliyor" olarak ayarla.
+    - [x] **Veritabanı (DAO/Repository):** `Order` tablosundaki `status` alanını güncelleyecek fonksiyon yaz.
 
-- [ ] **F1.5: Sipariş Listesinde Arama Yapabilme**
-    - [ ] **UI:** `OrderListScreen`'e bir arama çubuğu (`TextField`) ekle.
-    - [ ] **ViewModel/Notifier:** Arama metnini tutacak bir state (`StateProvider` veya `StateNotifier` içinde) oluştur.
-    - [ ] **Veritabanı (DAO/Repository):** `orderCode` veya `customerName` alanlarında `LIKE %searchText%` ile arama yapacak sorgu ekle/fonksiyon yaz.
-    - [ ] **ViewModel/Notifier:** Arama metni değiştikçe sipariş listesini (filtrelenmiş olarak) güncelle.
+- [x] **F1.5: Sipariş Listesinde Arama Yapabilme**
+    - [x] **UI:** `OrderListScreen`'e bir arama çubuğu (`TextField`) ekle.
+    - [x] **ViewModel/Notifier:** Arama metnini tutacak bir state (`StateProvider` veya `StateNotifier` içinde) oluştur.
+    - [x] **Veritabanı (DAO/Repository):** `orderCode` veya `customerName` alanlarında `LIKE %searchText%` ile arama yapacak sorgu ekle/fonksiyon yaz.
+    - [x] **ViewModel/Notifier:** Arama metni değiştikçe sipariş listesini (filtrelenmiş olarak) güncelle.
 
-- [ ] **F1.6: Sipariş Listesini Filtreleyebilme**
-    - [ ] **UI:** `OrderListScreen`'e durum filtreleme seçenekleri (örn: `DropdownButton`, `ChoiceChip`'ler - "Tümü", "Bekliyor", "Kısmi", "Tamamlandı") ekle.
-    - [ ] **ViewModel/Notifier:** Seçili filtre durumunu tutacak bir state oluştur.
-    - [ ] **Veritabanı (DAO/Repository):** Belirli bir `status`'e sahip siparişleri getirecek sorgu ekle/fonksiyon yaz.
-    - [ ] **ViewModel/Notifier:** Filtre seçimi değiştikçe sipariş listesini (filtrelenmiş olarak) güncelle.
+- [x] **F1.6: Sipariş Listesini Filtreleyebilme**
+    - [x] **UI:** `OrderListScreen`'e durum filtreleme seçenekleri (örn: `DropdownButton`, `ChoiceChip`'ler - "Tümü", "Bekliyor", "Kısmi", "Tamamlandı") ekle.
+    - [x] **ViewModel/Notifier:** Seçili filtre durumunu tutacak bir state oluştur.
+    - [x] **Veritabanı (DAO/Repository):** Belirli bir `status`'e sahip siparişleri getirecek sorgu ekle/fonksiyon yaz.
+    - [x] **ViewModel/Notifier:** Filtre seçimi değiştikçe sipariş listesini (filtrelenmiş olarak) güncelle.
 
 ### Modül 2: Barkod Okuma ve Sayım (Barcode Scanning & Counting)
 
