@@ -12,14 +12,33 @@ class OrderRepositoryImpl implements OrderRepository {
   OrderRepositoryImpl(this._db);
 
   @override
-  Future<List<Order>> getAllOrders() async {
-    return await _db.select(_db.orders).get();
+  Future<List<Order>> getOrders({
+    String? searchQuery,
+    OrderStatus? filterStatus,
+  }) async {
+    var query = _db.select(_db.orders);
+
+    if (searchQuery != null && searchQuery.isNotEmpty) {
+      query = query
+        ..where((o) =>
+            o.orderCode.contains(searchQuery) |
+            o.customerName.contains(searchQuery));
+    }
+    if (filterStatus != null) {
+      query = query..where((o) => o.status.equals(filterStatus.name));
+    }
+    query = query
+      ..orderBy([
+        (o) => OrderingTerm(expression: o.createdAt, mode: OrderingMode.desc)
+      ]);
+    return await query.get();
   }
 
   @override
-  Future<Order> getOrderById(int id) async {
-    return await (_db.select(_db.orders)..where((o) => o.id.equals(id)))
-        .getSingle();
+  Future<Order?> getOrderById(String orderCode) async {
+    return await (_db.select(_db.orders)
+          ..where((o) => o.orderCode.equals(orderCode)))
+        .getSingleOrNull();
   }
 
   @override
@@ -33,16 +52,29 @@ class OrderRepositoryImpl implements OrderRepository {
   }
 
   @override
-  Future<bool> deleteOrder(int id) async {
-    final deletedRows =
-        await (_db.delete(_db.orders)..where((o) => o.id.equals(id))).go();
+  Future<bool> deleteOrder(String orderCode) async {
+    final orderToDelete = await getOrderById(orderCode);
+    if (orderToDelete == null) {
+      return false;
+    }
+    await (_db.delete(_db.orderItems)
+          ..where((oi) => oi.orderId.equals(orderToDelete.id)))
+        .go();
+
+    final deletedRows = await (_db.delete(_db.orders)
+          ..where((o) => o.id.equals(orderToDelete.id)))
+        .go();
     return deletedRows > 0;
   }
 
   @override
-  Future<List<OrderItem>> getOrderItems(int orderId) async {
+  Future<List<OrderItem>> getOrderItems(String orderCode) async {
+    final order = await getOrderById(orderCode);
+    if (order == null) {
+      return [];
+    }
     return await (_db.select(_db.orderItems)
-          ..where((oi) => oi.orderId.equals(orderId)))
+          ..where((oi) => oi.orderId.equals(order.id)))
         .get();
   }
 
@@ -53,9 +85,15 @@ class OrderRepositoryImpl implements OrderRepository {
 
   @override
   Future<bool> updateOrderItemScannedQuantity(
-      int orderItemId, int newQuantity) async {
+      String orderItemId, int newQuantity) async {
+    final itemId = int.tryParse(orderItemId);
+    if (itemId == null) {
+      print("Error: orderItemId '$orderItemId' is not a valid integer for PK.");
+      return false;
+    }
+
     final affectedRows = await (_db.update(_db.orderItems)
-          ..where((oi) => oi.id.equals(orderItemId)))
+          ..where((oi) => oi.id.equals(itemId)))
         .write(OrderItemsCompanion(scannedQuantity: Value(newQuantity)));
     return affectedRows > 0;
   }
@@ -90,9 +128,14 @@ class OrderRepositoryImpl implements OrderRepository {
   }
 
   @override
-  Future<bool> updateOrderStatus(int orderId, OrderStatus newStatus) async {
+  Future<bool> updateOrderStatus(
+      String orderCode, OrderStatus newStatus) async {
+    final orderToUpdate = await getOrderById(orderCode);
+    if (orderToUpdate == null) {
+      return false;
+    }
     final affectedRows = await (_db.update(_db.orders)
-          ..where((o) => o.id.equals(orderId)))
+          ..where((o) => o.id.equals(orderToUpdate.id)))
         .write(OrdersCompanion(
       status: Value(newStatus),
       updatedAt: Value(DateTime.now()),
@@ -101,9 +144,12 @@ class OrderRepositoryImpl implements OrderRepository {
   }
 
   @override
-  Future<Map<String, dynamic>> getOrderSummary(int orderId) async {
-    final order = await getOrderById(orderId);
-    final items = await getOrderItems(orderId);
+  Future<Map<String, dynamic>> getOrderSummary(String orderCode) async {
+    final order = await getOrderById(orderCode);
+    if (order == null) {
+      return {'error': 'Order not found'};
+    }
+    final items = await getOrderItems(orderCode);
 
     int totalQuantity = 0;
     int totalScannedQuantity = 0;
@@ -118,7 +164,9 @@ class OrderRepositoryImpl implements OrderRepository {
       'items': items,
       'totalQuantity': totalQuantity,
       'totalScannedQuantity': totalScannedQuantity,
-      'progress': items.isEmpty ? 0.0 : totalScannedQuantity / totalQuantity,
+      'progress': totalQuantity == 0
+          ? 0.0
+          : totalScannedQuantity / totalQuantity.toDouble(),
     };
   }
 
@@ -149,64 +197,49 @@ class OrderRepositoryImpl implements OrderRepository {
   Future<void> createOrderWithItems({
     required model_order.Order orderData,
     required List<model_order_item.OrderItem> itemsData,
-    required List<String> customerProductCodes, // Received for mapping
+    required List<String> customerProductCodes,
   }) async {
     await _db.transaction(() async {
-      // 1. Check if order with orderCode already exists
       final existingOrderQuery = _db.select(_db.orders)
         ..where((o) => o.orderCode.equals(orderData.orderCode));
       final existingOrder = await existingOrderQuery.getSingleOrNull();
 
       if (existingOrder != null) {
-        // TODO: Decide on more sophisticated handling for duplicate order codes as per project rules.
-        // For now, throw an exception to prevent duplicates as per "mükerrer kayıt önlenecek".
         throw Exception(
             'Sipariş kodu "${orderData.orderCode}" ile zaten bir sipariş mevcut.');
       }
 
-      // 2. Create the new Order
       final newOrderId = await _db.into(_db.orders).insert(
             OrdersCompanion(
               orderCode: Value(orderData.orderCode),
               customerName: Value(orderData.customerName),
-              status: Value(orderData.status),
-              createdAt: Value(orderData.createdAt),
-              updatedAt: Value(orderData.updatedAt),
+              status: Value(orderData.status ?? OrderStatus.pending),
+              createdAt: Value(orderData.createdAt ?? DateTime.now()),
+              updatedAt: Value(DateTime.now()),
             ),
           );
 
-      // 3. Create OrderItems
       for (var i = 0; i < itemsData.length; i++) {
         final item = itemsData[i];
-        final customerProductCode = customerProductCodes[i];
-
-        // --- CRITICAL TODO: Implement Product ID Mapping (F4.x) ---
-        // The following productId is a PLACEHOLDER.
-        // You MUST look up 'customerProductCode' in 'ProductCodeMapping' table
-        // to get the correct internal 'productId'.
-        // Handle cases where mapping is not found (e.g., skip item, default product, throw error).
-        int mappedProductId = 0; // <<<<------ PLACEHOLDER PRODUCT ID
-        // Example: mappedProductId = await _getProductIdFromMapping(customerProductCode, orderData.customerName);
-        // --- END CRITICAL TODO ---
+        int mappedProductId = item.productId ?? 0;
 
         await _db.into(_db.orderItems).insert(
               OrderItemsCompanion(
                 orderId: Value(newOrderId),
-                // productId: Value(item.productId), // This was from the temporary model, use mappedProductId
-                productId: Value(
-                    mappedProductId), // Use the (currently placeholder) mapped ID
+                productId: Value(mappedProductId),
                 quantity: Value(item.quantity),
-                scannedQuantity: Value(item.scannedQuantity),
+                scannedQuantity: Value(item.scannedQuantity ?? 0),
               ),
             );
       }
     });
   }
 
-  // TODO: Helper method for product mapping, potentially in a dedicated ProductMappingService
-  // Future<int> _getProductIdFromMapping(String customerProductCode, String customerName) async {
-  //   // Access ProductCodeMappingDAO here
-  //   // ... logic to find product id ...
-  //   return 0; // Placeholder
-  // }
+  @override
+  Future<void> importOrdersFromExcel(String filePath) async {
+    print(
+        "OrderRepositoryImpl: importOrdersFromExcel called with $filePath. Actual Excel parsing and data transformation to be handled by a service.");
+    throw UnimplementedError(
+        "Excel import logic needs to be implemented in a service layer calling repository methods.");
+  }
 }

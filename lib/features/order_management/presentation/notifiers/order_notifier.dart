@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_count_track/core/database/app_database.dart';
 import 'package:flutter_count_track/features/order_management/domain/repositories/order_repository.dart';
-import 'package:flutter_count_track/features/order_management/data/repositories/order_repository_impl.dart';
+import 'package:flutter_count_track/features/order_management/presentation/notifiers/order_providers.dart';
 import 'package:flutter_count_track/features/order_management/data/services/excel_import_service.dart';
 
 // State class for order management
@@ -10,12 +10,14 @@ class OrderState {
   final bool isLoading;
   final String? error;
   final Map<String, dynamic>? selectedOrderSummary;
+  final String? successMessage;
 
   const OrderState({
     this.orders = const [],
     this.isLoading = false,
     this.error,
     this.selectedOrderSummary,
+    this.successMessage,
   });
 
   OrderState copyWith({
@@ -23,12 +25,19 @@ class OrderState {
     bool? isLoading,
     String? error,
     Map<String, dynamic>? selectedOrderSummary,
+    bool clearSelectedOrderSummary = false,
+    String? successMessage,
+    bool clearError = false,
+    bool clearSuccessMessage = false,
   }) {
     return OrderState(
       orders: orders ?? this.orders,
       isLoading: isLoading ?? this.isLoading,
-      error: error,
-      selectedOrderSummary: selectedOrderSummary ?? this.selectedOrderSummary,
+      error: clearError ? null : error,
+      selectedOrderSummary: clearSelectedOrderSummary
+          ? null
+          : selectedOrderSummary ?? this.selectedOrderSummary,
+      successMessage: clearSuccessMessage ? null : successMessage,
     );
   }
 }
@@ -39,14 +48,16 @@ class OrderNotifier extends StateNotifier<OrderState> {
 
   OrderNotifier(this._repository, this._excelImportService)
       : super(const OrderState()) {
-    // İlk yüklemede siparişleri getir
     loadOrders();
   }
 
-  Future<void> loadOrders() async {
+  Future<void> loadOrders(
+      {String? searchQuery, OrderStatus? filterStatus}) async {
     try {
-      state = state.copyWith(isLoading: true, error: null);
-      final orders = await _repository.getAllOrders();
+      state = state.copyWith(
+          isLoading: true, clearError: true, clearSuccessMessage: true);
+      final orders = await _repository.getOrders(
+          searchQuery: searchQuery, filterStatus: filterStatus);
       state = state.copyWith(orders: orders, isLoading: false);
     } catch (e) {
       state = state.copyWith(
@@ -56,11 +67,14 @@ class OrderNotifier extends StateNotifier<OrderState> {
     }
   }
 
-  Future<void> createOrder(OrdersCompanion order) async {
+  Future<void> createOrder(OrdersCompanion orderCompanion) async {
     try {
-      state = state.copyWith(isLoading: true, error: null);
-      await _repository.createOrder(order);
-      await loadOrders(); // Listeyi yenile
+      state = state.copyWith(
+          isLoading: true, clearError: true, clearSuccessMessage: true);
+      await _repository.createOrder(orderCompanion);
+      await loadOrders();
+      state = state.copyWith(
+          isLoading: false, successMessage: "Sipariş başarıyla oluşturuldu.");
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -69,11 +83,20 @@ class OrderNotifier extends StateNotifier<OrderState> {
     }
   }
 
-  Future<void> updateOrderStatus(int orderId, OrderStatus newStatus) async {
+  Future<void> updateOrderStatusUI(
+      String orderCode, OrderStatus newStatus) async {
     try {
-      state = state.copyWith(isLoading: true, error: null);
-      await _repository.updateOrderStatus(orderId, newStatus);
-      await loadOrders(); // Listeyi yenile
+      state = state.copyWith(
+          isLoading: true, clearError: true, clearSuccessMessage: true);
+      bool success = await _repository.updateOrderStatus(orderCode, newStatus);
+      await loadOrders();
+      if (success) {
+        state = state.copyWith(
+            isLoading: false, successMessage: "Sipariş durumu güncellendi.");
+      } else {
+        state = state.copyWith(
+            isLoading: false, error: "Sipariş durumu güncellenemedi.");
+      }
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -82,11 +105,18 @@ class OrderNotifier extends StateNotifier<OrderState> {
     }
   }
 
-  Future<void> deleteOrder(int orderId) async {
+  Future<void> deleteOrderUI(String orderCode) async {
     try {
-      state = state.copyWith(isLoading: true, error: null);
-      await _repository.deleteOrder(orderId);
-      await loadOrders(); // Listeyi yenile
+      state = state.copyWith(
+          isLoading: true, clearError: true, clearSuccessMessage: true);
+      bool success = await _repository.deleteOrder(orderCode);
+      await loadOrders();
+      if (success) {
+        state = state.copyWith(
+            isLoading: false, successMessage: "Sipariş silindi.");
+      } else {
+        state = state.copyWith(isLoading: false, error: "Sipariş silinemedi.");
+      }
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -95,35 +125,14 @@ class OrderNotifier extends StateNotifier<OrderState> {
     }
   }
 
-  Future<void> searchOrders({
-    String? orderCode,
-    String? customerName,
-    OrderStatus? status,
-    DateTime? startDate,
-    DateTime? endDate,
-  }) async {
+  Future<void> loadOrderSummaryUI(String orderCode) async {
     try {
-      state = state.copyWith(isLoading: true, error: null);
-      final orders = await _repository.searchOrders(
-        orderCode: orderCode,
-        customerName: customerName,
-        status: status,
-        startDate: startDate,
-        endDate: endDate,
-      );
-      state = state.copyWith(orders: orders, isLoading: false);
-    } catch (e) {
       state = state.copyWith(
-        isLoading: false,
-        error: 'Sipariş araması yapılırken hata oluştu: $e',
-      );
-    }
-  }
-
-  Future<void> loadOrderSummary(int orderId) async {
-    try {
-      state = state.copyWith(isLoading: true, error: null);
-      final summary = await _repository.getOrderSummary(orderId);
+          isLoading: true,
+          clearError: true,
+          clearSuccessMessage: true,
+          clearSelectedOrderSummary: true);
+      final summary = await _repository.getOrderSummary(orderCode);
       state = state.copyWith(
         selectedOrderSummary: summary,
         isLoading: false,
@@ -136,23 +145,25 @@ class OrderNotifier extends StateNotifier<OrderState> {
     }
   }
 
-  Future<void> updateOrderItemScannedQuantity(
-    int orderItemId,
+  Future<void> updateOrderItemScannedQuantityUI(
+    String orderItemId,
     int newQuantity,
+    String? activeOrderCode,
   ) async {
     try {
-      state = state.copyWith(isLoading: true, error: null);
+      state = state.copyWith(
+          isLoading: true, clearError: true, clearSuccessMessage: true);
       await _repository.updateOrderItemScannedQuantity(
           orderItemId, newQuantity);
 
-      // Refresh both the main order list and the selected order summary if applicable
       await loadOrders();
-      if (state.selectedOrderSummary != null) {
-        final orderId = (state.selectedOrderSummary!['order'] as Order).id;
-        await loadOrderSummary(orderId);
+      if (activeOrderCode != null &&
+          state.selectedOrderSummary != null &&
+          state.selectedOrderSummary!['order']?.orderCode == activeOrderCode) {
+        await loadOrderSummaryUI(activeOrderCode);
       }
       state = state.copyWith(
-          isLoading: false); // Ensure loading is set to false after operations
+          isLoading: false, successMessage: "Ürün miktarı güncellendi.");
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
@@ -161,57 +172,57 @@ class OrderNotifier extends StateNotifier<OrderState> {
     }
   }
 
-  Future<void> importOrdersFromExcelFile(String filePath) async {
-    state = state.copyWith(isLoading: true, error: null);
+  Future<void> importOrdersFromExcelUI(String filePath) async {
     try {
-      final List<ExcelOrderImportData> importDataList =
+      state = state.copyWith(
+          isLoading: true, clearError: true, clearSuccessMessage: true);
+      final List<ExcelOrderImportData> importedData =
           await _excelImportService.importOrdersFromExcel(filePath);
 
-      if (importDataList.isEmpty) {
+      int successCount = 0;
+      int failureCount = 0;
+      List<String> errorMessages = [];
+
+      for (var data in importedData) {
+        try {
+          await _repository.createOrderWithItems(
+            orderData: data.order,
+            itemsData: data.items,
+            customerProductCodes: data.customerProductCodes,
+          );
+          successCount++;
+        } catch (e) {
+          failureCount++;
+          errorMessages.add("Sipariş ${data.order.orderCode}: ${e.toString()}");
+        }
+      }
+
+      await loadOrders();
+
+      String message = "Excel içe aktarma tamamlandı. Başarılı: $successCount";
+      if (failureCount > 0) {
+        message += ", Hatalı: $failureCount.";
         state = state.copyWith(
             isLoading: false,
-            error: "Excel dosyasında içe aktarılacak geçerli veri bulunamadı.");
-        return;
+            error: "$message\nDetaylar: ${errorMessages.join('\n')}",
+            successMessage: successCount > 0
+                ? "Bazı siparişler başarıyla aktarıldı."
+                : null);
+      } else {
+        state = state.copyWith(isLoading: false, successMessage: message);
       }
-
-      for (var importData in importDataList) {
-        await _repository.createOrderWithItems(
-          orderData: importData.order,
-          itemsData: importData.items,
-          customerProductCodes: importData.customerProductCodes,
-        );
-      }
-
-      await loadOrders(); // Refresh the order list
-      // state is already set to isLoading: false by loadOrders if successful
     } catch (e) {
       state = state.copyWith(
         isLoading: false,
-        error: 'Excel içe aktarma işlemi sırasında hata: $e',
+        error: 'Excel içe aktarma sırasında genel hata: $e',
       );
-      // Re-throw to allow UI to catch it if needed, or handle it all here.
-      // For now, the error is set in the state and caught by the UI's SnackBar.
     }
   }
 }
 
-// Providers
-final orderRepositoryProvider = Provider<OrderRepository>((ref) {
-  final database = ref.watch(databaseProvider);
-  return OrderRepositoryImpl(database);
-});
-
-final databaseProvider = Provider<AppDatabase>((ref) {
-  return AppDatabase();
-});
-
-final excelImportServiceProvider = Provider<ExcelImportService>((ref) {
-  return ExcelImportService();
-});
-
 final orderNotifierProvider =
     StateNotifierProvider<OrderNotifier, OrderState>((ref) {
   final repository = ref.watch(orderRepositoryProvider);
-  final excelImportService = ref.watch(excelImportServiceProvider);
-  return OrderNotifier(repository, excelImportService);
+  final excelService = ref.watch(excelImportServiceProvider);
+  return OrderNotifier(repository, excelService);
 });

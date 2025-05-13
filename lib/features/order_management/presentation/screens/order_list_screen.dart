@@ -34,7 +34,7 @@ class OrderListScreen extends ConsumerWidget {
                   // This method will be created in OrderNotifier
                   await ref
                       .read(orderNotifierProvider.notifier)
-                      .importOrdersFromExcelFile(filePath);
+                      .importOrdersFromExcelUI(filePath);
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(

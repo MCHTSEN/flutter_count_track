@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_count_track/core/database/app_database.dart';
+import 'package:flutter_count_track/features/order_management/presentation/screens/order_detail_screen.dart';
 
 class OrderListItem extends StatelessWidget {
   final Order order;
@@ -32,35 +33,50 @@ class OrderListItem extends StatelessWidget {
             ),
           ],
         ),
-        trailing: _buildStatusChip(order.status),
+        trailing: _buildStatusChip(context, order.status),
         onTap: () {
-          // TODO: Sipariş detay sayfasına yönlendir
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (context) =>
+                  OrderDetailScreen(orderCode: order.orderCode),
+            ),
+          );
         },
       ),
     );
   }
 
-  Widget _buildStatusChip(OrderStatus status) {
-    final (color, label) = switch (status) {
-      OrderStatus.pending => (Colors.orange, 'Bekliyor'),
-      OrderStatus.partial => (Colors.blue, 'Kısmi Gönderim'),
-      OrderStatus.completed => (Colors.green, 'Tamamlandı'),
+  Widget _buildStatusChip(BuildContext context, OrderStatus status) {
+    final (Color chipColor, String label) = switch (status) {
+      OrderStatus.pending => (
+          Theme.of(context).colorScheme.secondaryContainer,
+          'Bekliyor'
+        ),
+      OrderStatus.partial => (
+          Theme.of(context).colorScheme.tertiaryContainer,
+          'Kısmi Gönderim'
+        ),
+      OrderStatus.completed => (
+          Theme.of(context).colorScheme.primaryContainer,
+          'Tamamlandı'
+        ),
     };
 
     return Chip(
       label: Text(
         label,
-        style: const TextStyle(
-          color: Colors.white,
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onSecondaryContainer,
           fontSize: 12,
         ),
       ),
-      backgroundColor: color,
+      backgroundColor: chipColor,
       padding: const EdgeInsets.symmetric(horizontal: 8),
     );
   }
 
   String _formatDate(DateTime date) {
-    return '${date.day}/${date.month}/${date.year}';
+    return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
   }
 }

@@ -23,12 +23,10 @@ class _OrderSearchBarState extends ConsumerState<OrderSearchBar> {
   }
 
   void _performSearch() {
-    ref.read(orderNotifierProvider.notifier).searchOrders(
-          orderCode:
+    ref.read(orderNotifierProvider.notifier).loadOrders(
+          searchQuery:
               _searchController.text.isEmpty ? null : _searchController.text,
-          status: _selectedStatus,
-          startDate: _startDate,
-          endDate: _endDate,
+          filterStatus: _selectedStatus,
         );
   }
 
