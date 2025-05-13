@@ -26,16 +26,16 @@ Projenizin "Paketleme Takip Sistemi" için özellik modüllerine ait detaylı ya
     - [x] **ViewModel/Notifier:** Sipariş listesini (Riverpod `FutureProvider` veya `StateNotifierProvider` ile) UI'a sağla.
     - [x] **UI Widget (Liste Elemanı):** Her bir sipariş için Sipariş Kodu, Müşteri Adı, Durum, Tarih bilgilerini gösterecek `OrderListItemWidget` oluştur.
     - [x] **UI Widget (Liste):** `ListView.builder` ile `OrderListItemWidget`'lar kullanılarak sipariş listesi oluştur.
-    - [ ] **Navigasyon:** Bir `OrderListItemWidget`'a tıklandığında `OrderDetailScreen`'e (ilgili `orderId` ile) yönlendirme yap.
+    - [x] **Navigasyon:** Bir `OrderListItemWidget`'a tıklandığında `OrderDetailScreen`'e (ilgili `orderId` ile) yönlendirme yap.
 
-- [ ] **F1.3: Sipariş Detaylarını Görüntüleme**
-    - [ ] **UI Ekranı:** `OrderDetailScreen` adında yeni bir ekran oluştur (veya mevcut bir ekranı geliştir).
-    - [ ] **Veritabanı (DAO/Repository):**
-        - [ ] Belirli bir `orderId`'ye ait `Order` bilgilerini getirecek fonksiyon yaz.
-        - [ ] Belirli bir `orderId`'ye ait tüm `OrderItem`'ları (ürün detayları, istenen/okunan miktar ile) getirecek fonksiyon yaz (gerekirse `Product` ve `ProductCodeMapping` ile `JOIN` yapılacak).
-    - [ ] **ViewModel/Notifier:** Seçilen siparişin detaylarını (`Order` ve `OrderItem` listesi) UI'a sağla.
-    - [ ] **UI:** Siparişin genel bilgilerini (kod, müşteri, tarih, durum) ekranda göster.
-    - [ ] **UI (Ürün Tablosu/Listesi):** Siparişteki ürünleri (Müşteri Ürün Kodu, Bizim Ürün Kodumuz, İstenen Miktar, Okunan Miktar, Kalan Miktar, İlerleme Barı) bir tablo veya liste yapısında göster.
+- [x] **F1.3: Sipariş Detaylarını Görüntüleme**
+    - [x] **UI Ekranı:** `OrderDetailScreen` adında yeni bir ekran oluştur (veya mevcut bir ekranı geliştir).
+    - [x] **Veritabanı (DAO/Repository):**
+        - [x] Belirli bir `orderId`'ye ait `Order` bilgilerini getirecek fonksiyon yaz.
+        - [x] Belirli bir `orderId`'ye ait tüm `OrderItem`'ları (ürün detayları, istenen/okunan miktar ile) getirecek fonksiyon yaz (gerekirse `Product` ve `ProductCodeMapping` ile `JOIN` yapılacak).
+    - [x] **ViewModel/Notifier:** Seçilen siparişin detaylarını (`Order` ve `OrderItem` listesi) UI'a sağla.
+    - [x] **UI:** Siparişin genel bilgilerini (kod, müşteri, tarih, durum) ekranda göster.
+    - [x] **UI (Ürün Tablosu/Listesi):** Siparişteki ürünleri (Müşteri Ürün Kodu, Bizim Ürün Kodumuz, İstenen Miktar, Okunan Miktar, Kalan Miktar, İlerleme Barı) bir tablo veya liste yapısında göster.
 
 - [x] **F1.4: Sipariş Durumunu Gösterme ve Otomatik Güncelleme**
     - [x] **UI:** Sipariş listesinde ve detay ekranında sipariş durumunu (Bekliyor, Kısmen Gönderildi, Tamamlandı) ikon veya renk ile görselleştir.
@@ -60,44 +60,44 @@ Projenizin "Paketleme Takip Sistemi" için özellik modüllerine ait detaylı ya
 
 ### Modül 2: Barkod Okuma ve Sayım (Barcode Scanning & Counting)
 
-- [ ] **F2.1: Barkod Okuyucudan Gelen Veriyi Yakalama**
-    - [ ] **UI:** `OrderDetailScreen`'de barkod girişi için bir `TextField` oluştur (`autofocus: true` ve klavye gibi davranan barkod okuyucu için `onSubmitted` veya `onChanged` ile veri alınacak).
-    - [ ] **ViewModel/Notifier:** Okunan barkod değerini alıp işleyecek bir fonksiyon (`processBarcode(String barcode)`) tanımla.
+- [x] **F2.1: Barkod Okuyucudan Gelen Veriyi Yakalama**
+    - [x] **UI:** `OrderDetailScreen`'de barkod girişi için bir `TextField` oluştur (`autofocus: true` ve klavye gibi davranan barkod okuyucu için `onSubmitted` veya `onChanged` ile veri alınacak).
+    - [x] **ViewModel/Notifier:** Okunan barkod değerini alıp işleyecek bir fonksiyon (`processBarcode(String barcode)`) tanımla.
 
-- [ ] **F2.2: Okunan Barkodu Ürün Kodu Eşleştirme (Mapping) ile Eşleştirme**
-    - [ ] **İş Mantığı (ViewModel/Servis):** `processBarcode` fonksiyonu içinde:
-        - [ ] Okunan barkod değerini (müşteri ürün kodu) al.
-        - [ ] **Veritabanı (DAO/Repository - `ProductCodeMapping`, `Product`):**
-            - [ ] `ProductCodeMapping` tablosunda `customerProductCode` (ve gerekirse siparişin müşterisine göre `customerName`) ile eşleşen kayıt ara.
-            - [ ] Eşleşen kayıttan `productId` al.
-            - [ ] `Product` tablosundan bu `productId`'ye ait ürün detaylarını (`ourProductCode`, `isUniqueBarcodeRequired`) çek.
-        - [ ] **Hata Yönetimi:** Eşleşme bulunamazsa veya ürün o anki siparişte yoksa uygun bir hata durumu oluştur (F2.5'e yönlendirilecek).
+- [x] **F2.2: Okunan Barkodu Ürün Kodu Eşleştirme (Mapping) ile Eşleştirme**
+    - [x] **İş Mantığı (ViewModel/Servis):** `processBarcode` fonksiyonu içinde:
+        - [x] Okunan barkod değerini (müşteri ürün kodu) al.
+        - [x] **Veritabanı (DAO/Repository - `ProductCodeMapping`, `Product`):**
+            - [x] `ProductCodeMapping` tablosunda `customerProductCode` (ve gerekirse siparişin müşterisine göre `customerName`) ile eşleşen kayıt ara.
+            - [x] Eşleşen kayıttan `productId` al.
+            - [x] `Product` tablosundan bu `productId`'ye ait ürün detaylarını (`ourProductCode`, `isUniqueBarcodeRequired`) çek.
+        - [x] **Hata Yönetimi:** Eşleşme bulunamazsa veya ürün o anki siparişte yoksa uygun bir hata durumu oluştur (F2.5'e yönlendirilecek).
 
-- [ ] **F2.3: Eşleşen Ürün İçin Siparişteki Okunan Miktarı Artırma**
-    - [ ] **İş Mantığı (ViewModel/Servis - F2.2 başarılıysa):**
-        - [ ] Eşleşen ürünün, aktif siparişteki ilgili `OrderItem`'ının `scannedQuantity` değerini 1 artır.
-        - [ ] `scannedQuantity`'nin `quantity`'yi geçmemesini sağla.
-        - [ ] **Veritabanı (DAO/Repository - `OrderItem`):** İlgili `OrderItem`'ın `scannedQuantity` değerini güncelle.
-        - [ ] **Veritabanı (DAO/Repository - `BarcodeRead`):** Okunan her barkodu (başarılı/başarısız eşleşme) `BarcodeRead` tablosuna logla (`orderId`, `productId` (varsa), `barcode`, `timestamp`).
-        - [ ] **ViewModel/Notifier:** UI'daki `OrderItem` listesini güncelle.
-        - [ ] **Durum Güncelleme Tetikleme:** Sipariş durumu (F1.4) ve teslimat durumu kontrol et/güncelle.
+- [x] **F2.3: Eşleşen Ürün İçin Siparişteki Okunan Miktarı Artırma**
+    - [x] **İş Mantığı (ViewModel/Servis - F2.2 başarılıysa):**
+        - [x] Eşleşen ürünün, aktif siparişteki ilgili `OrderItem`'ının `scannedQuantity` değerini 1 artır.
+        - [x] `scannedQuantity`'nin `quantity`'yi geçmemesini sağla.
+        - [x] **Veritabanı (DAO/Repository - `OrderItem`):** İlgili `OrderItem`'ın `scannedQuantity` değerini güncelle.
+        - [x] **Veritabanı (DAO/Repository - `BarcodeRead`):** Okunan her barkodu (başarılı/başarısız eşleşme) `BarcodeRead` tablosuna logla (`orderId`, `productId` (varsa), `barcode`, `timestamp`).
+        - [x] **ViewModel/Notifier:** UI'daki `OrderItem` listesini güncelle.
+        - [x] **Durum Güncelleme Tetikleme:** Sipariş durumu (F1.4) ve teslimat durumu kontrol et/güncelle.
 
-- [ ] **F2.4: Sayım İlerlemesini Görsel Olarak Gösterme**
-    - [ ] **UI (`OrderDetailScreen` - Ürün Listesi):** Her ürün kalemi için:
-        - [ ] `LinearProgressIndicator` ekle (değeri: `scannedQuantity / quantity`).
-        - [ ] "Okunan / Toplam" (örn: "5 / 10") metnini göster.
-        - [ ] **UI (Opsiyonel):** Siparişin geneli için bir ilerleme göstergesi ekle.
+- [x] **F2.4: Sayım İlerlemesini Görsel Olarak Gösterme**
+    - [x] **UI (`OrderDetailScreen` - Ürün Listesi):** Her ürün kalemi için:
+        - [x] `LinearProgressIndicator` ekle (değeri: `scannedQuantity / quantity`).
+        - [x] "Okunan / Toplam" (örn: "5 / 10") metnini göster.
+        - [x] **UI (Opsiyonel):** Siparişin geneli için bir ilerleme göstergesi ekle.
 
-- [ ] **F2.5: Sesli ve Renkli Bildirimler**
-    - [ ] **Assets:** Kısa onay, uyarı ve hata ses dosyalarını (`.mp3`, `.wav`) `assets/sounds/` klasörüne ekle ve `pubspec.yaml`'da deklare et.
-    - [ ] **Servis (Ses Çalma):** `audioplayers` paketi ile sesi çalacak bir yardımcı fonksiyon/servis oluştur.
-    - [ ] **UI Geri Bildirimi (ViewModel/Notifier aracılığıyla):**
-        - [ ] **Başarılı Okuma:** Ekranda geçici yeşil renkli bildirim göster (örn: `Snackbar`) ve onay sesi çal.
-        - [ ] **Benzersiz Barkod Tekrarı:** Ekranda geçici sarı renkli bildirim ("Bu barkod zaten okutuldu!") ve uyarı sesi çal.
-        - [ ] **Tanımsız/Hatalı Barkod/Eşleşme Yok:** Ekranda geçici kırmızı renkli bildirim ("Barkod bulunamadı!" veya "Ürün siparişte yok!") ve hata sesi çal.
-    - [ ] **UI (Bildirim Alanı):** `OrderDetailScreen`'de bu bildirimlerin gösterileceği bir alan (örn: ekranın üstünde/altında bir bar) tasarla.
+- [x] **F2.5: Sesli ve Renkli Bildirimler**
+    - [x] **Assets:** Kısa onay, uyarı ve hata ses dosyalarını (`.mp3`, `.wav`) `assets/sounds/` klasörüne ekle ve `pubspec.yaml`'da deklare et.
+    - [x] **Servis (Ses Çalma):** `audioplayers` paketi ile sesi çalacak bir yardımcı fonksiyon/servis oluştur.
+    - [x] **UI Geri Bildirimi (ViewModel/Notifier aracılığıyla):**
+        - [x] **Başarılı Okuma:** Ekranda geçici yeşil renkli bildirim göster (örn: `Snackbar`) ve onay sesi çal.
+        - [x] **Benzersiz Barkod Tekrarı:** Ekranda geçici sarı renkli bildirim ("Bu barkod zaten okutuldu!") ve uyarı sesi çal.
+        - [x] **Tanımsız/Hatalı Barkod/Eşleşme Yok:** Ekranda geçici kırmızı renkli bildirim ("Barkod bulunamadı!" veya "Ürün siparişte yok!") ve hata sesi çal.
+    - [x] **UI (Bildirim Alanı):** `OrderDetailScreen`'de bu bildirimlerin gösterileceği bir alan (örn: ekranın üstünde/altında bir bar) tasarla.
 
-- [ ] **F2.6: Benzersiz Barkod Kontrolü**
-    - [ ] **Model (Product):** `isUniqueBarcodeRequired` (boolean) alanı ekle.
-    - [ ] **İş Mantığı (ViewModel/Servis - F2.2'den sonra, F2.3'ten önce):**
-        - [ ] Eşleşen ürünün `isUniqueBarcodeRequired` özelliği `true`
+- [x] **F2.6: Benzersiz Barkod Kontrolü**
+    - [x] **Model (Product):** `isUniqueBarcodeRequired` (boolean) alanı ekle.
+    - [x] **İş Mantığı (ViewModel/Servis - F2.2'den sonra, F2.3'ten önce):**
+        - [x] Eşleşen ürünün `isUniqueBarcodeRequired` özelliği `true`
