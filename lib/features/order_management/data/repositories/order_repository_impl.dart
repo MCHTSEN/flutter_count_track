@@ -242,4 +242,27 @@ class OrderRepositoryImpl implements OrderRepository {
     throw UnimplementedError(
         "Excel import logic needs to be implemented in a service layer calling repository methods.");
   }
+
+  @override
+  Future<Product?> getProductById(int productId) async {
+    return await (_db.select(_db.products)
+          ..where((p) => p.id.equals(productId)))
+        .getSingleOrNull();
+  }
+
+  @override
+  Future<ProductCodeMapping?> getProductCodeMapping(
+      int productId, String customerName) async {
+    return await (_db.select(_db.productCodeMappings)
+          ..where((pcm) => pcm.productId.equals(productId))
+          ..where((pcm) => pcm.customerName.equals(customerName)))
+        .getSingleOrNull();
+  }
+
+  @override
+  Future<List<ProductCodeMapping>> getProductCodeMappings(int productId) async {
+    return await (_db.select(_db.productCodeMappings)
+          ..where((pcm) => pcm.productId.equals(productId)))
+        .get();
+  }
 }

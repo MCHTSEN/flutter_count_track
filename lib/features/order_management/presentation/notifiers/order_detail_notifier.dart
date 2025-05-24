@@ -4,36 +4,51 @@ import 'package:flutter_count_track/features/order_management/domain/repositorie
 // Assuming a provider for OrderRepository is defined elsewhere, e.g., order_providers.dart
 import 'package:flutter_count_track/features/order_management/presentation/notifiers/order_providers.dart'; // Placeholder for actual provider
 
-// TODO: Define a state class for OrderDetailState (e.g., loading, data, error)
+// Ürün ve barkod bilgilerini içeren yardımcı sınıf
+class OrderItemDetail {
+  final OrderItem orderItem;
+  final Product? product;
+  final ProductCodeMapping? productCodeMapping;
+
+  OrderItemDetail({
+    required this.orderItem,
+    this.product,
+    this.productCodeMapping,
+  });
+}
 
 // Example State Definition (adjust as needed):
 class OrderDetailState {
   final bool isLoading;
   final Order? order;
-  final List<OrderItem>? orderItems;
+  final List<OrderItemDetail>? orderItemDetails;
   final String? errorMessage;
 
   const OrderDetailState({
     this.isLoading = false,
     this.order,
-    this.orderItems,
+    this.orderItemDetails,
     this.errorMessage,
   });
 
   OrderDetailState copyWith({
     bool? isLoading,
     Order? order,
-    List<OrderItem>? orderItems,
+    List<OrderItemDetail>? orderItemDetails,
     String? errorMessage,
     bool clearError = false, // Utility to easily clear error message
   }) {
     return OrderDetailState(
       isLoading: isLoading ?? this.isLoading,
       order: order ?? this.order,
-      orderItems: orderItems ?? this.orderItems,
+      orderItemDetails: orderItemDetails ?? this.orderItemDetails,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
     );
   }
+
+  // Sadece OrderItem listesi alabilmek için yardımcı getter
+  List<OrderItem>? get orderItems =>
+      orderItemDetails?.map((detail) => detail.orderItem).toList();
 }
 
 class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
@@ -51,8 +66,27 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
       final order = await _orderRepository.getOrderById(_orderCode);
       if (order != null) {
         final items = await _orderRepository.getOrderItems(_orderCode);
-        state =
-            state.copyWith(isLoading: false, order: order, orderItems: items);
+
+        // Ürün detaylarını ve barkod bilgilerini getir
+        final List<OrderItemDetail> itemDetails = [];
+
+        for (final item in items) {
+          // Ürün bilgisini getir
+          final product = await _orderRepository.getProductById(item.productId);
+
+          // Ürün kodu eşleştirme bilgisini getir
+          final mapping = await _orderRepository.getProductCodeMapping(
+              item.productId, order.customerName);
+
+          itemDetails.add(OrderItemDetail(
+            orderItem: item,
+            product: product,
+            productCodeMapping: mapping,
+          ));
+        }
+
+        state = state.copyWith(
+            isLoading: false, order: order, orderItemDetails: itemDetails);
       } else {
         state = state.copyWith(
             isLoading: false,

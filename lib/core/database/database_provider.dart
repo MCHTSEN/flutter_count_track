@@ -9,8 +9,7 @@ final appDatabaseProvider = Provider<AppDatabase>((ref) {
   final db = AppDatabase(); // Creates a new instance
 
   // If you need to dispose of the database when the provider is disposed:
-  // ref.onDispose(() => db.close());
-  // Make sure your AppDatabase class has a close() method if you use this.
+  ref.onDispose(() => db.close());
 
   return db;
 });

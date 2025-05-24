@@ -38,6 +38,15 @@ abstract class OrderRepository {
   Future<bool> updateOrderStatus(
       String orderId, OrderStatus newStatus); // Use String ID
 
+  // Sipariş arama
+  Future<List<Order>> searchOrders({
+    String? orderCode,
+    String? customerName,
+    OrderStatus? status,
+    DateTime? startDate,
+    DateTime? endDate,
+  });
+
   // Excel Import - kept as is, might internally use createOrderWithItems
   Future<void> importOrdersFromExcel(String filePath);
 
@@ -46,4 +55,10 @@ abstract class OrderRepository {
   Stream<List<Order>> watchAllOrders();
   // Stream<Order?> watchOrderById(String orderId);
   // Stream<List<OrderItem>> watchOrderItems(String orderId);
+
+  // Ürün ve barkod bilgileri
+  Future<Product?> getProductById(int productId);
+  Future<ProductCodeMapping?> getProductCodeMapping(
+      int productId, String customerName);
+  Future<List<ProductCodeMapping>> getProductCodeMappings(int productId);
 }
