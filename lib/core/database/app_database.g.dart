@@ -366,6 +366,12 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
   late final GeneratedColumn<String> name = GeneratedColumn<String>(
       'name', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _barcodeMeta =
+      const VerificationMeta('barcode');
+  @override
+  late final GeneratedColumn<String> barcode = GeneratedColumn<String>(
+      'barcode', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
   static const VerificationMeta _isUniqueBarcodeRequiredMeta =
       const VerificationMeta('isUniqueBarcodeRequired');
   @override
@@ -378,7 +384,7 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
           defaultValue: const Constant(false));
   @override
   List<GeneratedColumn> get $columns =>
-      [id, ourProductCode, name, isUniqueBarcodeRequired];
+      [id, ourProductCode, name, barcode, isUniqueBarcodeRequired];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -406,6 +412,12 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
     } else if (isInserting) {
       context.missing(_nameMeta);
     }
+    if (data.containsKey('barcode')) {
+      context.handle(_barcodeMeta,
+          barcode.isAcceptableOrUnknown(data['barcode']!, _barcodeMeta));
+    } else if (isInserting) {
+      context.missing(_barcodeMeta);
+    }
     if (data.containsKey('is_unique_barcode_required')) {
       context.handle(
           _isUniqueBarcodeRequiredMeta,
@@ -428,6 +440,8 @@ class $ProductsTable extends Products with TableInfo<$ProductsTable, Product> {
           DriftSqlType.string, data['${effectivePrefix}our_product_code'])!,
       name: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}name'])!,
+      barcode: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}barcode'])!,
       isUniqueBarcodeRequired: attachedDatabase.typeMapping.read(
           DriftSqlType.bool,
           data['${effectivePrefix}is_unique_barcode_required'])!,
@@ -444,11 +458,13 @@ class Product extends DataClass implements Insertable<Product> {
   final int id;
   final String ourProductCode;
   final String name;
+  final String barcode;
   final bool isUniqueBarcodeRequired;
   const Product(
       {required this.id,
       required this.ourProductCode,
       required this.name,
+      required this.barcode,
       required this.isUniqueBarcodeRequired});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -456,6 +472,7 @@ class Product extends DataClass implements Insertable<Product> {
     map['id'] = Variable<int>(id);
     map['our_product_code'] = Variable<String>(ourProductCode);
     map['name'] = Variable<String>(name);
+    map['barcode'] = Variable<String>(barcode);
     map['is_unique_barcode_required'] = Variable<bool>(isUniqueBarcodeRequired);
     return map;
   }
@@ -465,6 +482,7 @@ class Product extends DataClass implements Insertable<Product> {
       id: Value(id),
       ourProductCode: Value(ourProductCode),
       name: Value(name),
+      barcode: Value(barcode),
       isUniqueBarcodeRequired: Value(isUniqueBarcodeRequired),
     );
   }
@@ -476,6 +494,7 @@ class Product extends DataClass implements Insertable<Product> {
       id: serializer.fromJson<int>(json['id']),
       ourProductCode: serializer.fromJson<String>(json['ourProductCode']),
       name: serializer.fromJson<String>(json['name']),
+      barcode: serializer.fromJson<String>(json['barcode']),
       isUniqueBarcodeRequired:
           serializer.fromJson<bool>(json['isUniqueBarcodeRequired']),
     );
@@ -487,6 +506,7 @@ class Product extends DataClass implements Insertable<Product> {
       'id': serializer.toJson<int>(id),
       'ourProductCode': serializer.toJson<String>(ourProductCode),
       'name': serializer.toJson<String>(name),
+      'barcode': serializer.toJson<String>(barcode),
       'isUniqueBarcodeRequired':
           serializer.toJson<bool>(isUniqueBarcodeRequired),
     };
@@ -496,11 +516,13 @@ class Product extends DataClass implements Insertable<Product> {
           {int? id,
           String? ourProductCode,
           String? name,
+          String? barcode,
           bool? isUniqueBarcodeRequired}) =>
       Product(
         id: id ?? this.id,
         ourProductCode: ourProductCode ?? this.ourProductCode,
         name: name ?? this.name,
+        barcode: barcode ?? this.barcode,
         isUniqueBarcodeRequired:
             isUniqueBarcodeRequired ?? this.isUniqueBarcodeRequired,
       );
@@ -511,6 +533,7 @@ class Product extends DataClass implements Insertable<Product> {
           ? data.ourProductCode.value
           : this.ourProductCode,
       name: data.name.present ? data.name.value : this.name,
+      barcode: data.barcode.present ? data.barcode.value : this.barcode,
       isUniqueBarcodeRequired: data.isUniqueBarcodeRequired.present
           ? data.isUniqueBarcodeRequired.value
           : this.isUniqueBarcodeRequired,
@@ -523,6 +546,7 @@ class Product extends DataClass implements Insertable<Product> {
           ..write('id: $id, ')
           ..write('ourProductCode: $ourProductCode, ')
           ..write('name: $name, ')
+          ..write('barcode: $barcode, ')
           ..write('isUniqueBarcodeRequired: $isUniqueBarcodeRequired')
           ..write(')'))
         .toString();
@@ -530,7 +554,7 @@ class Product extends DataClass implements Insertable<Product> {
 
   @override
   int get hashCode =>
-      Object.hash(id, ourProductCode, name, isUniqueBarcodeRequired);
+      Object.hash(id, ourProductCode, name, barcode, isUniqueBarcodeRequired);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -538,6 +562,7 @@ class Product extends DataClass implements Insertable<Product> {
           other.id == this.id &&
           other.ourProductCode == this.ourProductCode &&
           other.name == this.name &&
+          other.barcode == this.barcode &&
           other.isUniqueBarcodeRequired == this.isUniqueBarcodeRequired);
 }
 
@@ -545,30 +570,36 @@ class ProductsCompanion extends UpdateCompanion<Product> {
   final Value<int> id;
   final Value<String> ourProductCode;
   final Value<String> name;
+  final Value<String> barcode;
   final Value<bool> isUniqueBarcodeRequired;
   const ProductsCompanion({
     this.id = const Value.absent(),
     this.ourProductCode = const Value.absent(),
     this.name = const Value.absent(),
+    this.barcode = const Value.absent(),
     this.isUniqueBarcodeRequired = const Value.absent(),
   });
   ProductsCompanion.insert({
     this.id = const Value.absent(),
     required String ourProductCode,
     required String name,
+    required String barcode,
     this.isUniqueBarcodeRequired = const Value.absent(),
   })  : ourProductCode = Value(ourProductCode),
-        name = Value(name);
+        name = Value(name),
+        barcode = Value(barcode);
   static Insertable<Product> custom({
     Expression<int>? id,
     Expression<String>? ourProductCode,
     Expression<String>? name,
+    Expression<String>? barcode,
     Expression<bool>? isUniqueBarcodeRequired,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
       if (ourProductCode != null) 'our_product_code': ourProductCode,
       if (name != null) 'name': name,
+      if (barcode != null) 'barcode': barcode,
       if (isUniqueBarcodeRequired != null)
         'is_unique_barcode_required': isUniqueBarcodeRequired,
     });
@@ -578,11 +609,13 @@ class ProductsCompanion extends UpdateCompanion<Product> {
       {Value<int>? id,
       Value<String>? ourProductCode,
       Value<String>? name,
+      Value<String>? barcode,
       Value<bool>? isUniqueBarcodeRequired}) {
     return ProductsCompanion(
       id: id ?? this.id,
       ourProductCode: ourProductCode ?? this.ourProductCode,
       name: name ?? this.name,
+      barcode: barcode ?? this.barcode,
       isUniqueBarcodeRequired:
           isUniqueBarcodeRequired ?? this.isUniqueBarcodeRequired,
     );
@@ -600,6 +633,9 @@ class ProductsCompanion extends UpdateCompanion<Product> {
     if (name.present) {
       map['name'] = Variable<String>(name.value);
     }
+    if (barcode.present) {
+      map['barcode'] = Variable<String>(barcode.value);
+    }
     if (isUniqueBarcodeRequired.present) {
       map['is_unique_barcode_required'] =
           Variable<bool>(isUniqueBarcodeRequired.value);
@@ -613,6 +649,7 @@ class ProductsCompanion extends UpdateCompanion<Product> {
           ..write('id: $id, ')
           ..write('ourProductCode: $ourProductCode, ')
           ..write('name: $name, ')
+          ..write('barcode: $barcode, ')
           ..write('isUniqueBarcodeRequired: $isUniqueBarcodeRequired')
           ..write(')'))
         .toString();
@@ -2438,12 +2475,14 @@ typedef $$ProductsTableCreateCompanionBuilder = ProductsCompanion Function({
   Value<int> id,
   required String ourProductCode,
   required String name,
+  required String barcode,
   Value<bool> isUniqueBarcodeRequired,
 });
 typedef $$ProductsTableUpdateCompanionBuilder = ProductsCompanion Function({
   Value<int> id,
   Value<String> ourProductCode,
   Value<String> name,
+  Value<String> barcode,
   Value<bool> isUniqueBarcodeRequired,
 });
 
@@ -2533,6 +2572,9 @@ class $$ProductsTableFilterComposer
 
   ColumnFilters<String> get name => $composableBuilder(
       column: $table.name, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get barcode => $composableBuilder(
+      column: $table.barcode, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<bool> get isUniqueBarcodeRequired => $composableBuilder(
       column: $table.isUniqueBarcodeRequired,
@@ -2642,6 +2684,9 @@ class $$ProductsTableOrderingComposer
   ColumnOrderings<String> get name => $composableBuilder(
       column: $table.name, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<String> get barcode => $composableBuilder(
+      column: $table.barcode, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<bool> get isUniqueBarcodeRequired => $composableBuilder(
       column: $table.isUniqueBarcodeRequired,
       builder: (column) => ColumnOrderings(column));
@@ -2664,6 +2709,9 @@ class $$ProductsTableAnnotationComposer
 
   GeneratedColumn<String> get name =>
       $composableBuilder(column: $table.name, builder: (column) => column);
+
+  GeneratedColumn<String> get barcode =>
+      $composableBuilder(column: $table.barcode, builder: (column) => column);
 
   GeneratedColumn<bool> get isUniqueBarcodeRequired => $composableBuilder(
       column: $table.isUniqueBarcodeRequired, builder: (column) => column);
@@ -2785,24 +2833,28 @@ class $$ProductsTableTableManager extends RootTableManager<
             Value<int> id = const Value.absent(),
             Value<String> ourProductCode = const Value.absent(),
             Value<String> name = const Value.absent(),
+            Value<String> barcode = const Value.absent(),
             Value<bool> isUniqueBarcodeRequired = const Value.absent(),
           }) =>
               ProductsCompanion(
             id: id,
             ourProductCode: ourProductCode,
             name: name,
+            barcode: barcode,
             isUniqueBarcodeRequired: isUniqueBarcodeRequired,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
             required String ourProductCode,
             required String name,
+            required String barcode,
             Value<bool> isUniqueBarcodeRequired = const Value.absent(),
           }) =>
               ProductsCompanion.insert(
             id: id,
             ourProductCode: ourProductCode,
             name: name,
+            barcode: barcode,
             isUniqueBarcodeRequired: isUniqueBarcodeRequired,
           ),
           withReferenceMapper: (p0) => p0

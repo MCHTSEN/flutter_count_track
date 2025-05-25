@@ -19,6 +19,9 @@ class ProcessBarcodeUseCase {
     required String barcode,
     required String customerName,
   }) async {
+    print(
+        '🔄 ProcessBarcode: Başlıyor - OrderId: $orderId, Barkod: $barcode, Müşteri: $customerName');
+
     // Barkodu kaydet (hangi ürüne ait olduğunu henüz bilmiyoruz)
     await _barcodeRepository.logBarcodeRead(orderId, null, barcode);
 
@@ -29,8 +32,11 @@ class ProcessBarcodeUseCase {
     );
 
     if (product == null) {
+      print('❌ ProcessBarcode: Ürün bulunamadı');
       return BarcodeProcessResult.productNotFound;
     }
+
+    print('✅ ProcessBarcode: Ürün bulundu: ${product.ourProductCode}');
 
     // Ürünün mevcut siparişte olup olmadığını kontrol et
     final orderItem = await _barcodeRepository.findOrderItemByProductId(
@@ -39,8 +45,12 @@ class ProcessBarcodeUseCase {
     );
 
     if (orderItem == null) {
+      print('❌ ProcessBarcode: Ürün siparişte bulunamadı');
       return BarcodeProcessResult.productNotInOrder;
     }
+
+    print(
+        '✅ ProcessBarcode: Sipariş kalemi bulundu: ${orderItem.scannedQuantity}/${orderItem.quantity}');
 
     // Barkod kaydını ürün ID'si ile güncelle
     await _barcodeRepository.logBarcodeRead(orderId, product.id, barcode);
@@ -55,6 +65,7 @@ class ProcessBarcodeUseCase {
       );
 
       if (isDuplicate) {
+        print('⚠️ ProcessBarcode: Tekrarlanan benzersiz barkod');
         return BarcodeProcessResult.duplicateUniqueBarcode;
       }
     }
@@ -67,19 +78,25 @@ class ProcessBarcodeUseCase {
         newScannedQuantity,
       );
 
+      print(
+          '✅ ProcessBarcode: Miktar güncellendi: $newScannedQuantity/${orderItem.quantity}');
+
       // Siparişin tamamlanıp tamamlanmadığını kontrol et
       final isComplete = await _barcodeRepository.checkIfOrderComplete(orderId);
       if (isComplete) {
         await _barcodeRepository.updateOrderStatus(
             orderId, OrderStatus.completed);
+        print('🎉 ProcessBarcode: Sipariş tamamlandı!');
       } else {
         // En az bir ürün okunduysa kısmen tamamlandı olarak güncelle
         await _barcodeRepository.updateOrderStatus(
             orderId, OrderStatus.partial);
+        print('📦 ProcessBarcode: Sipariş kısmen tamamlandı');
       }
 
       return BarcodeProcessResult.success;
     } else {
+      print('⚠️ ProcessBarcode: Sipariş kalemi zaten tamamlanmış');
       return BarcodeProcessResult.orderItemAlreadyComplete;
     }
   }

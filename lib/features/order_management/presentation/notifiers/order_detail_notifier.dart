@@ -63,20 +63,33 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
   Future<void> _fetchOrderDetails() async {
     state = state.copyWith(isLoading: true, clearError: true);
     try {
+      print(
+          '🔍 OrderDetail: Fetching order details for orderCode: $_orderCode');
+
       final order = await _orderRepository.getOrderById(_orderCode);
+      print('📋 OrderDetail: Order found: ${order?.orderCode ?? 'null'}');
+
       if (order != null) {
         final items = await _orderRepository.getOrderItems(_orderCode);
+        print('📦 OrderDetail: Found ${items.length} order items');
 
         // Ürün detaylarını ve barkod bilgilerini getir
         final List<OrderItemDetail> itemDetails = [];
 
         for (final item in items) {
+          print(
+              '🔎 OrderDetail: Processing order item with productId: ${item.productId}');
+
           // Ürün bilgisini getir
           final product = await _orderRepository.getProductById(item.productId);
+          print(
+              '🏷️ OrderDetail: Product found: ${product?.ourProductCode ?? 'null'} - ${product?.name ?? 'null'}');
 
           // Ürün kodu eşleştirme bilgisini getir
           final mapping = await _orderRepository.getProductCodeMapping(
               item.productId, order.customerName);
+          print(
+              '🔗 OrderDetail: Mapping found: ${mapping?.customerProductCode ?? 'null'}');
 
           itemDetails.add(OrderItemDetail(
             orderItem: item,
@@ -85,14 +98,21 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
           ));
         }
 
+        print(
+            '✅ OrderDetail: Successfully processed ${itemDetails.length} items');
+        print(
+            '📊 OrderDetail: Products found: ${itemDetails.where((d) => d.product != null).length}/${itemDetails.length}');
+
         state = state.copyWith(
             isLoading: false, order: order, orderItemDetails: itemDetails);
       } else {
+        print('❌ OrderDetail: Order not found');
         state = state.copyWith(
             isLoading: false,
             errorMessage: "Sipariş bulunamadı."); // Order not found.
       }
     } catch (e) {
+      print('💥 OrderDetail: Error fetching details: $e');
       state = state.copyWith(
           isLoading: false,
           errorMessage:

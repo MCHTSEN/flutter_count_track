@@ -10,13 +10,26 @@ class BarcodeRepositoryImpl implements BarcodeRepository {
   @override
   Future<Product?> findProductByCustomerCode(
       String customerProductCode, String customerName) async {
-    // Müşteri ürün kodu ve müşteri adına göre eşleştirme kaydını bul
+    // Önce doğrudan barkod ile ürün tablosunda ara
+    final productByBarcode = await (database.select(database.products)
+          ..where((tbl) => tbl.barcode.equals(customerProductCode)))
+        .getSingleOrNull();
+
+    if (productByBarcode != null) {
+      print(
+          '🔍 BarcodeRepository: Ürün barkod ile bulundu: ${productByBarcode.ourProductCode} - ${productByBarcode.barcode}');
+      return productByBarcode;
+    }
+
+    // Eğer doğrudan barkod ile bulunamadıysa, müşteri ürün kodu eşleştirmesi ile ara
     final mapping = await (database.select(database.productCodeMappings)
           ..where((tbl) => tbl.customerProductCode.equals(customerProductCode))
           ..where((tbl) => tbl.customerName.equals(customerName)))
         .getSingleOrNull();
 
     if (mapping == null) {
+      print(
+          '❌ BarcodeRepository: Ürün bulunamadı - Barkod: $customerProductCode, Müşteri: $customerName');
       return null;
     }
 
@@ -24,6 +37,11 @@ class BarcodeRepositoryImpl implements BarcodeRepository {
     final product = await (database.select(database.products)
           ..where((tbl) => tbl.id.equals(mapping.productId)))
         .getSingleOrNull();
+
+    if (product != null) {
+      print(
+          '🔍 BarcodeRepository: Ürün müşteri kodu ile bulundu: ${product.ourProductCode} - Mapping: ${mapping.customerProductCode}');
+    }
 
     return product;
   }

@@ -581,6 +581,41 @@ class OrderDetailScreen extends ConsumerWidget {
               overflow: TextOverflow.ellipsis,
             ),
 
+            const SizedBox(height: 8),
+
+            // Barkod bilgisi
+            if (product?.barcode != null) ...[
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 8),
+                decoration: BoxDecoration(
+                  color: Colors.blue[50],
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.blue[200]!, width: 1),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.qr_code, size: 16, color: Colors.blue[600]),
+                    const SizedBox(width: 4),
+                    Expanded(
+                      child: Text(
+                        product!.barcode,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.blue[700],
+                          fontFamily: 'monospace',
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+
             const Spacer(),
 
             // İlerleme çubuğu
@@ -625,17 +660,92 @@ class OrderDetailScreen extends ConsumerWidget {
 
   Widget _buildQuickBarcodeButtons(BuildContext context, WidgetRef ref,
       Order order, TextEditingController controller) {
-    final List<String> testBarcodes = [
-      '12345678901',
-      '23456789012',
-      '34567890123',
-    ];
+    final state = ref.watch(orderDetailNotifierProvider(orderCode));
+    final itemDetails = state.orderItemDetails ?? [];
+
+    // Siparişte bulunan ürünlerin barkodlarını al
+    final List<String> productBarcodes = itemDetails
+        .where((detail) => detail.product?.barcode != null)
+        .map((detail) => detail.product!.barcode)
+        .toList();
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Hızlı Test Barkodları:',
+          'Hızlı Test Barkodları (Bu Siparişte):',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.bold,
+            color: Colors.grey[700],
+          ),
+        ),
+        const SizedBox(height: 8),
+        if (productBarcodes.isNotEmpty) ...[
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              ...productBarcodes.map((barcode) {
+                // İlgili ürünü bul
+                final product = itemDetails
+                    .firstWhere((detail) => detail.product?.barcode == barcode)
+                    .product;
+                return ActionChip(
+                  label: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        product?.ourProductCode ?? '',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      Text(
+                        barcode,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ),
+                  backgroundColor: Colors.green[100],
+                  avatar:
+                      Icon(Icons.qr_code, size: 16, color: Colors.green[700]),
+                  onPressed: () {
+                    _processBarcodeInput(context, ref, order, barcode);
+                  },
+                );
+              }),
+              ActionChip(
+                label: const Text('Rastgele', style: TextStyle(fontSize: 12)),
+                avatar: const Icon(Icons.shuffle, size: 16),
+                backgroundColor: Colors.orange[100],
+                onPressed: () {
+                  final randomBarcode = List.generate(
+                      13,
+                      (_) => (DateTime.now().millisecondsSinceEpoch % 10)
+                          .toString()).join();
+                  _processBarcodeInput(context, ref, order, randomBarcode);
+                },
+              ),
+            ],
+          ),
+        ] else ...[
+          Text(
+            'Bu sipariş için ürün barkodu bilgisi yok.',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+        const SizedBox(height: 12),
+        Text(
+          'Genel Test Barkodları:',
           style: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.bold,
@@ -647,23 +757,29 @@ class OrderDetailScreen extends ConsumerWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
-            ...testBarcodes.map((barcode) => ActionChip(
-                  label: Text(barcode, style: const TextStyle(fontSize: 12)),
-                  backgroundColor: Colors.green[100],
-                  onPressed: () {
-                    _processBarcodeInput(context, ref, order, barcode);
-                  },
-                )),
+            // Genel test barkodları
             ActionChip(
-              label: const Text('Rastgele', style: TextStyle(fontSize: 12)),
-              avatar: const Icon(Icons.shuffle, size: 16),
-              backgroundColor: Colors.orange[100],
+              label: const Text('Test-1234567890123',
+                  style: TextStyle(fontSize: 10)),
+              backgroundColor: Colors.blue[100],
               onPressed: () {
-                final randomBarcode = List.generate(
-                    13,
-                    (_) => (DateTime.now().millisecondsSinceEpoch % 10)
-                        .toString()).join();
-                _processBarcodeInput(context, ref, order, randomBarcode);
+                _processBarcodeInput(context, ref, order, '1234567890123');
+              },
+            ),
+            ActionChip(
+              label: const Text('Test-2345678901234',
+                  style: TextStyle(fontSize: 10)),
+              backgroundColor: Colors.blue[100],
+              onPressed: () {
+                _processBarcodeInput(context, ref, order, '2345678901234');
+              },
+            ),
+            ActionChip(
+              label: const Text('Test-3456789012345',
+                  style: TextStyle(fontSize: 10)),
+              backgroundColor: Colors.blue[100],
+              onPressed: () {
+                _processBarcodeInput(context, ref, order, '3456789012345');
               },
             ),
           ],
