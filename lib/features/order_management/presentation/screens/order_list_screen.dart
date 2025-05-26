@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_count_track/core/database/app_database.dart';
 import 'package:flutter_count_track/features/order_management/presentation/notifiers/order_notifier.dart';
 import 'package:flutter_count_track/features/order_management/presentation/widgets/order_filter_section.dart';
-import 'package:flutter_count_track/features/order_management/presentation/widgets/order_grid.dart';
+import 'package:flutter_count_track/features/order_management/presentation/widgets/order_list.dart';
 import 'package:flutter_count_track/features/order_management/presentation/widgets/order_app_bar.dart';
 import 'package:flutter_count_track/features/order_management/presentation/mixins/order_list_screen_mixin.dart';
 
@@ -48,9 +48,9 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen>
             orders: orderState.orders,
           ),
 
-          // Ana sipariş grid'i
+          // Ana sipariş listesi
           Expanded(
-            child: OrderGrid(
+            child: OrderList(
               orders: orderState.orders,
               isLoading: orderState.isLoading,
               error: orderState.error,
