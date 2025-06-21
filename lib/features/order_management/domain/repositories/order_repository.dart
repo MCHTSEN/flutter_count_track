@@ -1,4 +1,3 @@
-import 'package:drift/drift.dart';
 import 'package:flutter_count_track/core/database/app_database.dart';
 import 'package:flutter_count_track/features/order_management/data/models/order.dart'
     as model_order;
@@ -32,11 +31,10 @@ abstract class OrderRepository {
   });
 
   // Sipariş özet bilgileri
-  Future<Map<String, dynamic>> getOrderSummary(String orderId); // Use String ID
+  Future<Map<String, dynamic>> getOrderSummary(String orderCode);
 
   // Method to update order status
-  Future<bool> updateOrderStatus(
-      String orderId, OrderStatus newStatus); // Use String ID
+  Future<bool> updateOrderStatus(String orderCode, OrderStatus newStatus);
 
   // Sipariş arama
   Future<List<Order>> searchOrders({
@@ -47,18 +45,20 @@ abstract class OrderRepository {
     DateTime? endDate,
   });
 
-  // Excel Import - kept as is, might internally use createOrderWithItems
+  // Excel'den içe aktarma
   Future<void> importOrdersFromExcel(String filePath);
 
-  // Streams
-  // Consider a single watchOrders stream with filter parameters if needed
+  // Streamler
   Stream<List<Order>> watchAllOrders();
-  // Stream<Order?> watchOrderById(String orderId);
+  Stream<Order> watchOrderById(int id);
   // Stream<List<OrderItem>> watchOrderItems(String orderId);
 
   // Ürün ve barkod bilgileri
   Future<Product?> getProductById(int productId);
   Future<ProductCodeMapping?> getProductCodeMapping(
       int productId, String customerName);
-  Future<List<ProductCodeMapping>> getProductCodeMappings(int productId);
+  Future<List<BarcodeRead>> getBarcodeHistory(String orderCode, {int? limit});
+
+  // Koli yönetimi
+  Future<List<Map<String, dynamic>>> getBoxContents(String orderCode);
 }

@@ -1283,6 +1283,12 @@ class $BarcodeReadsTable extends BarcodeReads
   late final GeneratedColumn<String> barcode = GeneratedColumn<String>(
       'barcode', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _boxNumberMeta =
+      const VerificationMeta('boxNumber');
+  @override
+  late final GeneratedColumn<int> boxNumber = GeneratedColumn<int>(
+      'box_number', aliasedName, true,
+      type: DriftSqlType.int, requiredDuringInsert: false);
   static const VerificationMeta _readAtMeta = const VerificationMeta('readAt');
   @override
   late final GeneratedColumn<DateTime> readAt = GeneratedColumn<DateTime>(
@@ -1292,7 +1298,7 @@ class $BarcodeReadsTable extends BarcodeReads
       defaultValue: currentDateAndTime);
   @override
   List<GeneratedColumn> get $columns =>
-      [id, orderId, productId, barcode, readAt];
+      [id, orderId, productId, barcode, boxNumber, readAt];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -1322,6 +1328,10 @@ class $BarcodeReadsTable extends BarcodeReads
     } else if (isInserting) {
       context.missing(_barcodeMeta);
     }
+    if (data.containsKey('box_number')) {
+      context.handle(_boxNumberMeta,
+          boxNumber.isAcceptableOrUnknown(data['box_number']!, _boxNumberMeta));
+    }
     if (data.containsKey('read_at')) {
       context.handle(_readAtMeta,
           readAt.isAcceptableOrUnknown(data['read_at']!, _readAtMeta));
@@ -1343,6 +1353,8 @@ class $BarcodeReadsTable extends BarcodeReads
           .read(DriftSqlType.int, data['${effectivePrefix}product_id']),
       barcode: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}barcode'])!,
+      boxNumber: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}box_number']),
       readAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}read_at'])!,
     );
@@ -1359,12 +1371,14 @@ class BarcodeRead extends DataClass implements Insertable<BarcodeRead> {
   final int orderId;
   final int? productId;
   final String barcode;
+  final int? boxNumber;
   final DateTime readAt;
   const BarcodeRead(
       {required this.id,
       required this.orderId,
       this.productId,
       required this.barcode,
+      this.boxNumber,
       required this.readAt});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
@@ -1375,6 +1389,9 @@ class BarcodeRead extends DataClass implements Insertable<BarcodeRead> {
       map['product_id'] = Variable<int>(productId);
     }
     map['barcode'] = Variable<String>(barcode);
+    if (!nullToAbsent || boxNumber != null) {
+      map['box_number'] = Variable<int>(boxNumber);
+    }
     map['read_at'] = Variable<DateTime>(readAt);
     return map;
   }
@@ -1387,6 +1404,9 @@ class BarcodeRead extends DataClass implements Insertable<BarcodeRead> {
           ? const Value.absent()
           : Value(productId),
       barcode: Value(barcode),
+      boxNumber: boxNumber == null && nullToAbsent
+          ? const Value.absent()
+          : Value(boxNumber),
       readAt: Value(readAt),
     );
   }
@@ -1399,6 +1419,7 @@ class BarcodeRead extends DataClass implements Insertable<BarcodeRead> {
       orderId: serializer.fromJson<int>(json['orderId']),
       productId: serializer.fromJson<int?>(json['productId']),
       barcode: serializer.fromJson<String>(json['barcode']),
+      boxNumber: serializer.fromJson<int?>(json['boxNumber']),
       readAt: serializer.fromJson<DateTime>(json['readAt']),
     );
   }
@@ -1410,6 +1431,7 @@ class BarcodeRead extends DataClass implements Insertable<BarcodeRead> {
       'orderId': serializer.toJson<int>(orderId),
       'productId': serializer.toJson<int?>(productId),
       'barcode': serializer.toJson<String>(barcode),
+      'boxNumber': serializer.toJson<int?>(boxNumber),
       'readAt': serializer.toJson<DateTime>(readAt),
     };
   }
@@ -1419,12 +1441,14 @@ class BarcodeRead extends DataClass implements Insertable<BarcodeRead> {
           int? orderId,
           Value<int?> productId = const Value.absent(),
           String? barcode,
+          Value<int?> boxNumber = const Value.absent(),
           DateTime? readAt}) =>
       BarcodeRead(
         id: id ?? this.id,
         orderId: orderId ?? this.orderId,
         productId: productId.present ? productId.value : this.productId,
         barcode: barcode ?? this.barcode,
+        boxNumber: boxNumber.present ? boxNumber.value : this.boxNumber,
         readAt: readAt ?? this.readAt,
       );
   BarcodeRead copyWithCompanion(BarcodeReadsCompanion data) {
@@ -1433,6 +1457,7 @@ class BarcodeRead extends DataClass implements Insertable<BarcodeRead> {
       orderId: data.orderId.present ? data.orderId.value : this.orderId,
       productId: data.productId.present ? data.productId.value : this.productId,
       barcode: data.barcode.present ? data.barcode.value : this.barcode,
+      boxNumber: data.boxNumber.present ? data.boxNumber.value : this.boxNumber,
       readAt: data.readAt.present ? data.readAt.value : this.readAt,
     );
   }
@@ -1444,13 +1469,15 @@ class BarcodeRead extends DataClass implements Insertable<BarcodeRead> {
           ..write('orderId: $orderId, ')
           ..write('productId: $productId, ')
           ..write('barcode: $barcode, ')
+          ..write('boxNumber: $boxNumber, ')
           ..write('readAt: $readAt')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode => Object.hash(id, orderId, productId, barcode, readAt);
+  int get hashCode =>
+      Object.hash(id, orderId, productId, barcode, boxNumber, readAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -1459,6 +1486,7 @@ class BarcodeRead extends DataClass implements Insertable<BarcodeRead> {
           other.orderId == this.orderId &&
           other.productId == this.productId &&
           other.barcode == this.barcode &&
+          other.boxNumber == this.boxNumber &&
           other.readAt == this.readAt);
 }
 
@@ -1467,12 +1495,14 @@ class BarcodeReadsCompanion extends UpdateCompanion<BarcodeRead> {
   final Value<int> orderId;
   final Value<int?> productId;
   final Value<String> barcode;
+  final Value<int?> boxNumber;
   final Value<DateTime> readAt;
   const BarcodeReadsCompanion({
     this.id = const Value.absent(),
     this.orderId = const Value.absent(),
     this.productId = const Value.absent(),
     this.barcode = const Value.absent(),
+    this.boxNumber = const Value.absent(),
     this.readAt = const Value.absent(),
   });
   BarcodeReadsCompanion.insert({
@@ -1480,6 +1510,7 @@ class BarcodeReadsCompanion extends UpdateCompanion<BarcodeRead> {
     required int orderId,
     this.productId = const Value.absent(),
     required String barcode,
+    this.boxNumber = const Value.absent(),
     this.readAt = const Value.absent(),
   })  : orderId = Value(orderId),
         barcode = Value(barcode);
@@ -1488,6 +1519,7 @@ class BarcodeReadsCompanion extends UpdateCompanion<BarcodeRead> {
     Expression<int>? orderId,
     Expression<int>? productId,
     Expression<String>? barcode,
+    Expression<int>? boxNumber,
     Expression<DateTime>? readAt,
   }) {
     return RawValuesInsertable({
@@ -1495,6 +1527,7 @@ class BarcodeReadsCompanion extends UpdateCompanion<BarcodeRead> {
       if (orderId != null) 'order_id': orderId,
       if (productId != null) 'product_id': productId,
       if (barcode != null) 'barcode': barcode,
+      if (boxNumber != null) 'box_number': boxNumber,
       if (readAt != null) 'read_at': readAt,
     });
   }
@@ -1504,12 +1537,14 @@ class BarcodeReadsCompanion extends UpdateCompanion<BarcodeRead> {
       Value<int>? orderId,
       Value<int?>? productId,
       Value<String>? barcode,
+      Value<int?>? boxNumber,
       Value<DateTime>? readAt}) {
     return BarcodeReadsCompanion(
       id: id ?? this.id,
       orderId: orderId ?? this.orderId,
       productId: productId ?? this.productId,
       barcode: barcode ?? this.barcode,
+      boxNumber: boxNumber ?? this.boxNumber,
       readAt: readAt ?? this.readAt,
     );
   }
@@ -1529,6 +1564,9 @@ class BarcodeReadsCompanion extends UpdateCompanion<BarcodeRead> {
     if (barcode.present) {
       map['barcode'] = Variable<String>(barcode.value);
     }
+    if (boxNumber.present) {
+      map['box_number'] = Variable<int>(boxNumber.value);
+    }
     if (readAt.present) {
       map['read_at'] = Variable<DateTime>(readAt.value);
     }
@@ -1542,7 +1580,307 @@ class BarcodeReadsCompanion extends UpdateCompanion<BarcodeRead> {
           ..write('orderId: $orderId, ')
           ..write('productId: $productId, ')
           ..write('barcode: $barcode, ')
+          ..write('boxNumber: $boxNumber, ')
           ..write('readAt: $readAt')
+          ..write(')'))
+        .toString();
+  }
+}
+
+class $BoxesTable extends Boxes with TableInfo<$BoxesTable, Boxe> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $BoxesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _orderIdMeta =
+      const VerificationMeta('orderId');
+  @override
+  late final GeneratedColumn<int> orderId = GeneratedColumn<int>(
+      'order_id', aliasedName, false,
+      type: DriftSqlType.int,
+      requiredDuringInsert: true,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('REFERENCES orders (id)'));
+  static const VerificationMeta _boxNumberMeta =
+      const VerificationMeta('boxNumber');
+  @override
+  late final GeneratedColumn<int> boxNumber = GeneratedColumn<int>(
+      'box_number', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _createdAtMeta =
+      const VerificationMeta('createdAt');
+  @override
+  late final GeneratedColumn<DateTime> createdAt = GeneratedColumn<DateTime>(
+      'created_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  static const VerificationMeta _updatedAtMeta =
+      const VerificationMeta('updatedAt');
+  @override
+  late final GeneratedColumn<DateTime> updatedAt = GeneratedColumn<DateTime>(
+      'updated_at', aliasedName, false,
+      type: DriftSqlType.dateTime,
+      requiredDuringInsert: false,
+      defaultValue: currentDateAndTime);
+  @override
+  List<GeneratedColumn> get $columns =>
+      [id, orderId, boxNumber, createdAt, updatedAt];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'boxes';
+  @override
+  VerificationContext validateIntegrity(Insertable<Boxe> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('order_id')) {
+      context.handle(_orderIdMeta,
+          orderId.isAcceptableOrUnknown(data['order_id']!, _orderIdMeta));
+    } else if (isInserting) {
+      context.missing(_orderIdMeta);
+    }
+    if (data.containsKey('box_number')) {
+      context.handle(_boxNumberMeta,
+          boxNumber.isAcceptableOrUnknown(data['box_number']!, _boxNumberMeta));
+    } else if (isInserting) {
+      context.missing(_boxNumberMeta);
+    }
+    if (data.containsKey('created_at')) {
+      context.handle(_createdAtMeta,
+          createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
+    }
+    if (data.containsKey('updated_at')) {
+      context.handle(_updatedAtMeta,
+          updatedAt.isAcceptableOrUnknown(data['updated_at']!, _updatedAtMeta));
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  Boxe map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return Boxe(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      orderId: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}order_id'])!,
+      boxNumber: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}box_number'])!,
+      createdAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
+      updatedAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}updated_at'])!,
+    );
+  }
+
+  @override
+  $BoxesTable createAlias(String alias) {
+    return $BoxesTable(attachedDatabase, alias);
+  }
+}
+
+class Boxe extends DataClass implements Insertable<Boxe> {
+  final int id;
+  final int orderId;
+  final int boxNumber;
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  const Boxe(
+      {required this.id,
+      required this.orderId,
+      required this.boxNumber,
+      required this.createdAt,
+      required this.updatedAt});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['order_id'] = Variable<int>(orderId);
+    map['box_number'] = Variable<int>(boxNumber);
+    map['created_at'] = Variable<DateTime>(createdAt);
+    map['updated_at'] = Variable<DateTime>(updatedAt);
+    return map;
+  }
+
+  BoxesCompanion toCompanion(bool nullToAbsent) {
+    return BoxesCompanion(
+      id: Value(id),
+      orderId: Value(orderId),
+      boxNumber: Value(boxNumber),
+      createdAt: Value(createdAt),
+      updatedAt: Value(updatedAt),
+    );
+  }
+
+  factory Boxe.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return Boxe(
+      id: serializer.fromJson<int>(json['id']),
+      orderId: serializer.fromJson<int>(json['orderId']),
+      boxNumber: serializer.fromJson<int>(json['boxNumber']),
+      createdAt: serializer.fromJson<DateTime>(json['createdAt']),
+      updatedAt: serializer.fromJson<DateTime>(json['updatedAt']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'orderId': serializer.toJson<int>(orderId),
+      'boxNumber': serializer.toJson<int>(boxNumber),
+      'createdAt': serializer.toJson<DateTime>(createdAt),
+      'updatedAt': serializer.toJson<DateTime>(updatedAt),
+    };
+  }
+
+  Boxe copyWith(
+          {int? id,
+          int? orderId,
+          int? boxNumber,
+          DateTime? createdAt,
+          DateTime? updatedAt}) =>
+      Boxe(
+        id: id ?? this.id,
+        orderId: orderId ?? this.orderId,
+        boxNumber: boxNumber ?? this.boxNumber,
+        createdAt: createdAt ?? this.createdAt,
+        updatedAt: updatedAt ?? this.updatedAt,
+      );
+  Boxe copyWithCompanion(BoxesCompanion data) {
+    return Boxe(
+      id: data.id.present ? data.id.value : this.id,
+      orderId: data.orderId.present ? data.orderId.value : this.orderId,
+      boxNumber: data.boxNumber.present ? data.boxNumber.value : this.boxNumber,
+      createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
+      updatedAt: data.updatedAt.present ? data.updatedAt.value : this.updatedAt,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('Boxe(')
+          ..write('id: $id, ')
+          ..write('orderId: $orderId, ')
+          ..write('boxNumber: $boxNumber, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, orderId, boxNumber, createdAt, updatedAt);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is Boxe &&
+          other.id == this.id &&
+          other.orderId == this.orderId &&
+          other.boxNumber == this.boxNumber &&
+          other.createdAt == this.createdAt &&
+          other.updatedAt == this.updatedAt);
+}
+
+class BoxesCompanion extends UpdateCompanion<Boxe> {
+  final Value<int> id;
+  final Value<int> orderId;
+  final Value<int> boxNumber;
+  final Value<DateTime> createdAt;
+  final Value<DateTime> updatedAt;
+  const BoxesCompanion({
+    this.id = const Value.absent(),
+    this.orderId = const Value.absent(),
+    this.boxNumber = const Value.absent(),
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  });
+  BoxesCompanion.insert({
+    this.id = const Value.absent(),
+    required int orderId,
+    required int boxNumber,
+    this.createdAt = const Value.absent(),
+    this.updatedAt = const Value.absent(),
+  })  : orderId = Value(orderId),
+        boxNumber = Value(boxNumber);
+  static Insertable<Boxe> custom({
+    Expression<int>? id,
+    Expression<int>? orderId,
+    Expression<int>? boxNumber,
+    Expression<DateTime>? createdAt,
+    Expression<DateTime>? updatedAt,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (orderId != null) 'order_id': orderId,
+      if (boxNumber != null) 'box_number': boxNumber,
+      if (createdAt != null) 'created_at': createdAt,
+      if (updatedAt != null) 'updated_at': updatedAt,
+    });
+  }
+
+  BoxesCompanion copyWith(
+      {Value<int>? id,
+      Value<int>? orderId,
+      Value<int>? boxNumber,
+      Value<DateTime>? createdAt,
+      Value<DateTime>? updatedAt}) {
+    return BoxesCompanion(
+      id: id ?? this.id,
+      orderId: orderId ?? this.orderId,
+      boxNumber: boxNumber ?? this.boxNumber,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (orderId.present) {
+      map['order_id'] = Variable<int>(orderId.value);
+    }
+    if (boxNumber.present) {
+      map['box_number'] = Variable<int>(boxNumber.value);
+    }
+    if (createdAt.present) {
+      map['created_at'] = Variable<DateTime>(createdAt.value);
+    }
+    if (updatedAt.present) {
+      map['updated_at'] = Variable<DateTime>(updatedAt.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('BoxesCompanion(')
+          ..write('id: $id, ')
+          ..write('orderId: $orderId, ')
+          ..write('boxNumber: $boxNumber, ')
+          ..write('createdAt: $createdAt, ')
+          ..write('updatedAt: $updatedAt')
           ..write(')'))
         .toString();
   }
@@ -2047,6 +2385,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $ProductCodeMappingsTable productCodeMappings =
       $ProductCodeMappingsTable(this);
   late final $BarcodeReadsTable barcodeReads = $BarcodeReadsTable(this);
+  late final $BoxesTable boxes = $BoxesTable(this);
   late final $DeliveriesTable deliveries = $DeliveriesTable(this);
   late final $DeliveryItemsTable deliveryItems = $DeliveryItemsTable(this);
   @override
@@ -2059,6 +2398,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         orderItems,
         productCodeMappings,
         barcodeReads,
+        boxes,
         deliveries,
         deliveryItems
       ];
@@ -2110,6 +2450,20 @@ final class $$OrdersTableReferences
         .filter((f) => f.orderId.id.sqlEquals($_itemColumn<int>('id')!));
 
     final cache = $_typedResult.readTableOrNull(_barcodeReadsRefsTable($_db));
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: cache));
+  }
+
+  static MultiTypedResultKey<$BoxesTable, List<Boxe>> _boxesRefsTable(
+          _$AppDatabase db) =>
+      MultiTypedResultKey.fromTable(db.boxes,
+          aliasName: $_aliasNameGenerator(db.orders.id, db.boxes.orderId));
+
+  $$BoxesTableProcessedTableManager get boxesRefs {
+    final manager = $$BoxesTableTableManager($_db, $_db.boxes)
+        .filter((f) => f.orderId.id.sqlEquals($_itemColumn<int>('id')!));
+
+    final cache = $_typedResult.readTableOrNull(_boxesRefsTable($_db));
     return ProcessedTableManager(
         manager.$state.copyWith(prefetchedData: cache));
   }
@@ -2192,6 +2546,27 @@ class $$OrdersTableFilterComposer
             $$BarcodeReadsTableFilterComposer(
               $db: $db,
               $table: $db.barcodeReads,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
+
+  Expression<bool> boxesRefs(
+      Expression<bool> Function($$BoxesTableFilterComposer f) f) {
+    final $$BoxesTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.boxes,
+        getReferencedColumn: (t) => t.orderId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$BoxesTableFilterComposer(
+              $db: $db,
+              $table: $db.boxes,
               $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
               joinBuilder: joinBuilder,
               $removeJoinBuilderFromRootComposer:
@@ -2320,6 +2695,27 @@ class $$OrdersTableAnnotationComposer
     return f(composer);
   }
 
+  Expression<T> boxesRefs<T extends Object>(
+      Expression<T> Function($$BoxesTableAnnotationComposer a) f) {
+    final $$BoxesTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.id,
+        referencedTable: $db.boxes,
+        getReferencedColumn: (t) => t.orderId,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$BoxesTableAnnotationComposer(
+              $db: $db,
+              $table: $db.boxes,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return f(composer);
+  }
+
   Expression<T> deliveriesRefs<T extends Object>(
       Expression<T> Function($$DeliveriesTableAnnotationComposer a) f) {
     final $$DeliveriesTableAnnotationComposer composer = $composerBuilder(
@@ -2354,7 +2750,10 @@ class $$OrdersTableTableManager extends RootTableManager<
     (Order, $$OrdersTableReferences),
     Order,
     PrefetchHooks Function(
-        {bool orderItemsRefs, bool barcodeReadsRefs, bool deliveriesRefs})> {
+        {bool orderItemsRefs,
+        bool barcodeReadsRefs,
+        bool boxesRefs,
+        bool deliveriesRefs})> {
   $$OrdersTableTableManager(_$AppDatabase db, $OrdersTable table)
       : super(TableManagerState(
           db: db,
@@ -2404,12 +2803,14 @@ class $$OrdersTableTableManager extends RootTableManager<
           prefetchHooksCallback: (
               {orderItemsRefs = false,
               barcodeReadsRefs = false,
+              boxesRefs = false,
               deliveriesRefs = false}) {
             return PrefetchHooks(
               db: db,
               explicitlyWatchedTables: [
                 if (orderItemsRefs) db.orderItems,
                 if (barcodeReadsRefs) db.barcodeReads,
+                if (boxesRefs) db.boxes,
                 if (deliveriesRefs) db.deliveries
               ],
               addJoins: null,
@@ -2435,6 +2836,17 @@ class $$OrdersTableTableManager extends RootTableManager<
                         managerFromTypedResult: (p0) =>
                             $$OrdersTableReferences(db, table, p0)
                                 .barcodeReadsRefs,
+                        referencedItemsForCurrentItem: (item,
+                                referencedItems) =>
+                            referencedItems.where((e) => e.orderId == item.id),
+                        typedResults: items),
+                  if (boxesRefs)
+                    await $_getPrefetchedData<Order, $OrdersTable, Boxe>(
+                        currentTable: table,
+                        referencedTable:
+                            $$OrdersTableReferences._boxesRefsTable(db),
+                        managerFromTypedResult: (p0) =>
+                            $$OrdersTableReferences(db, table, p0).boxesRefs,
                         referencedItemsForCurrentItem: (item,
                                 referencedItems) =>
                             referencedItems.where((e) => e.orderId == item.id),
@@ -2470,7 +2882,10 @@ typedef $$OrdersTableProcessedTableManager = ProcessedTableManager<
     (Order, $$OrdersTableReferences),
     Order,
     PrefetchHooks Function(
-        {bool orderItemsRefs, bool barcodeReadsRefs, bool deliveriesRefs})>;
+        {bool orderItemsRefs,
+        bool barcodeReadsRefs,
+        bool boxesRefs,
+        bool deliveriesRefs})>;
 typedef $$ProductsTableCreateCompanionBuilder = ProductsCompanion Function({
   Value<int> id,
   required String ourProductCode,
@@ -3564,6 +3979,7 @@ typedef $$BarcodeReadsTableCreateCompanionBuilder = BarcodeReadsCompanion
   required int orderId,
   Value<int?> productId,
   required String barcode,
+  Value<int?> boxNumber,
   Value<DateTime> readAt,
 });
 typedef $$BarcodeReadsTableUpdateCompanionBuilder = BarcodeReadsCompanion
@@ -3572,6 +3988,7 @@ typedef $$BarcodeReadsTableUpdateCompanionBuilder = BarcodeReadsCompanion
   Value<int> orderId,
   Value<int?> productId,
   Value<String> barcode,
+  Value<int?> boxNumber,
   Value<DateTime> readAt,
 });
 
@@ -3623,6 +4040,9 @@ class $$BarcodeReadsTableFilterComposer
 
   ColumnFilters<String> get barcode => $composableBuilder(
       column: $table.barcode, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get boxNumber => $composableBuilder(
+      column: $table.boxNumber, builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get readAt => $composableBuilder(
       column: $table.readAt, builder: (column) => ColumnFilters(column));
@@ -3683,6 +4103,9 @@ class $$BarcodeReadsTableOrderingComposer
   ColumnOrderings<String> get barcode => $composableBuilder(
       column: $table.barcode, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<int> get boxNumber => $composableBuilder(
+      column: $table.boxNumber, builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get readAt => $composableBuilder(
       column: $table.readAt, builder: (column) => ColumnOrderings(column));
 
@@ -3741,6 +4164,9 @@ class $$BarcodeReadsTableAnnotationComposer
 
   GeneratedColumn<String> get barcode =>
       $composableBuilder(column: $table.barcode, builder: (column) => column);
+
+  GeneratedColumn<int> get boxNumber =>
+      $composableBuilder(column: $table.boxNumber, builder: (column) => column);
 
   GeneratedColumn<DateTime> get readAt =>
       $composableBuilder(column: $table.readAt, builder: (column) => column);
@@ -3813,6 +4239,7 @@ class $$BarcodeReadsTableTableManager extends RootTableManager<
             Value<int> orderId = const Value.absent(),
             Value<int?> productId = const Value.absent(),
             Value<String> barcode = const Value.absent(),
+            Value<int?> boxNumber = const Value.absent(),
             Value<DateTime> readAt = const Value.absent(),
           }) =>
               BarcodeReadsCompanion(
@@ -3820,6 +4247,7 @@ class $$BarcodeReadsTableTableManager extends RootTableManager<
             orderId: orderId,
             productId: productId,
             barcode: barcode,
+            boxNumber: boxNumber,
             readAt: readAt,
           ),
           createCompanionCallback: ({
@@ -3827,6 +4255,7 @@ class $$BarcodeReadsTableTableManager extends RootTableManager<
             required int orderId,
             Value<int?> productId = const Value.absent(),
             required String barcode,
+            Value<int?> boxNumber = const Value.absent(),
             Value<DateTime> readAt = const Value.absent(),
           }) =>
               BarcodeReadsCompanion.insert(
@@ -3834,6 +4263,7 @@ class $$BarcodeReadsTableTableManager extends RootTableManager<
             orderId: orderId,
             productId: productId,
             barcode: barcode,
+            boxNumber: boxNumber,
             readAt: readAt,
           ),
           withReferenceMapper: (p0) => p0
@@ -3902,6 +4332,268 @@ typedef $$BarcodeReadsTableProcessedTableManager = ProcessedTableManager<
     (BarcodeRead, $$BarcodeReadsTableReferences),
     BarcodeRead,
     PrefetchHooks Function({bool orderId, bool productId})>;
+typedef $$BoxesTableCreateCompanionBuilder = BoxesCompanion Function({
+  Value<int> id,
+  required int orderId,
+  required int boxNumber,
+  Value<DateTime> createdAt,
+  Value<DateTime> updatedAt,
+});
+typedef $$BoxesTableUpdateCompanionBuilder = BoxesCompanion Function({
+  Value<int> id,
+  Value<int> orderId,
+  Value<int> boxNumber,
+  Value<DateTime> createdAt,
+  Value<DateTime> updatedAt,
+});
+
+final class $$BoxesTableReferences
+    extends BaseReferences<_$AppDatabase, $BoxesTable, Boxe> {
+  $$BoxesTableReferences(super.$_db, super.$_table, super.$_typedResult);
+
+  static $OrdersTable _orderIdTable(_$AppDatabase db) => db.orders
+      .createAlias($_aliasNameGenerator(db.boxes.orderId, db.orders.id));
+
+  $$OrdersTableProcessedTableManager get orderId {
+    final $_column = $_itemColumn<int>('order_id')!;
+
+    final manager = $$OrdersTableTableManager($_db, $_db.orders)
+        .filter((f) => f.id.sqlEquals($_column));
+    final item = $_typedResult.readTableOrNull(_orderIdTable($_db));
+    if (item == null) return manager;
+    return ProcessedTableManager(
+        manager.$state.copyWith(prefetchedData: [item]));
+  }
+}
+
+class $$BoxesTableFilterComposer extends Composer<_$AppDatabase, $BoxesTable> {
+  $$BoxesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get boxNumber => $composableBuilder(
+      column: $table.boxNumber, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnFilters(column));
+
+  $$OrdersTableFilterComposer get orderId {
+    final $$OrdersTableFilterComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.orderId,
+        referencedTable: $db.orders,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$OrdersTableFilterComposer(
+              $db: $db,
+              $table: $db.orders,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$BoxesTableOrderingComposer
+    extends Composer<_$AppDatabase, $BoxesTable> {
+  $$BoxesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get boxNumber => $composableBuilder(
+      column: $table.boxNumber, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get createdAt => $composableBuilder(
+      column: $table.createdAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get updatedAt => $composableBuilder(
+      column: $table.updatedAt, builder: (column) => ColumnOrderings(column));
+
+  $$OrdersTableOrderingComposer get orderId {
+    final $$OrdersTableOrderingComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.orderId,
+        referencedTable: $db.orders,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$OrdersTableOrderingComposer(
+              $db: $db,
+              $table: $db.orders,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$BoxesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $BoxesTable> {
+  $$BoxesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<int> get boxNumber =>
+      $composableBuilder(column: $table.boxNumber, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get createdAt =>
+      $composableBuilder(column: $table.createdAt, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get updatedAt =>
+      $composableBuilder(column: $table.updatedAt, builder: (column) => column);
+
+  $$OrdersTableAnnotationComposer get orderId {
+    final $$OrdersTableAnnotationComposer composer = $composerBuilder(
+        composer: this,
+        getCurrentColumn: (t) => t.orderId,
+        referencedTable: $db.orders,
+        getReferencedColumn: (t) => t.id,
+        builder: (joinBuilder,
+                {$addJoinBuilderToRootComposer,
+                $removeJoinBuilderFromRootComposer}) =>
+            $$OrdersTableAnnotationComposer(
+              $db: $db,
+              $table: $db.orders,
+              $addJoinBuilderToRootComposer: $addJoinBuilderToRootComposer,
+              joinBuilder: joinBuilder,
+              $removeJoinBuilderFromRootComposer:
+                  $removeJoinBuilderFromRootComposer,
+            ));
+    return composer;
+  }
+}
+
+class $$BoxesTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $BoxesTable,
+    Boxe,
+    $$BoxesTableFilterComposer,
+    $$BoxesTableOrderingComposer,
+    $$BoxesTableAnnotationComposer,
+    $$BoxesTableCreateCompanionBuilder,
+    $$BoxesTableUpdateCompanionBuilder,
+    (Boxe, $$BoxesTableReferences),
+    Boxe,
+    PrefetchHooks Function({bool orderId})> {
+  $$BoxesTableTableManager(_$AppDatabase db, $BoxesTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$BoxesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$BoxesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$BoxesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<int> orderId = const Value.absent(),
+            Value<int> boxNumber = const Value.absent(),
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<DateTime> updatedAt = const Value.absent(),
+          }) =>
+              BoxesCompanion(
+            id: id,
+            orderId: orderId,
+            boxNumber: boxNumber,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required int orderId,
+            required int boxNumber,
+            Value<DateTime> createdAt = const Value.absent(),
+            Value<DateTime> updatedAt = const Value.absent(),
+          }) =>
+              BoxesCompanion.insert(
+            id: id,
+            orderId: orderId,
+            boxNumber: boxNumber,
+            createdAt: createdAt,
+            updatedAt: updatedAt,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) =>
+                  (e.readTable(table), $$BoxesTableReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: ({orderId = false}) {
+            return PrefetchHooks(
+              db: db,
+              explicitlyWatchedTables: [],
+              addJoins: <
+                  T extends TableManagerState<
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic,
+                      dynamic>>(state) {
+                if (orderId) {
+                  state = state.withJoin(
+                    currentTable: table,
+                    currentColumn: table.orderId,
+                    referencedTable: $$BoxesTableReferences._orderIdTable(db),
+                    referencedColumn:
+                        $$BoxesTableReferences._orderIdTable(db).id,
+                  ) as T;
+                }
+
+                return state;
+              },
+              getPrefetchedDataCallback: (items) async {
+                return [];
+              },
+            );
+          },
+        ));
+}
+
+typedef $$BoxesTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $BoxesTable,
+    Boxe,
+    $$BoxesTableFilterComposer,
+    $$BoxesTableOrderingComposer,
+    $$BoxesTableAnnotationComposer,
+    $$BoxesTableCreateCompanionBuilder,
+    $$BoxesTableUpdateCompanionBuilder,
+    (Boxe, $$BoxesTableReferences),
+    Boxe,
+    PrefetchHooks Function({bool orderId})>;
 typedef $$DeliveriesTableCreateCompanionBuilder = DeliveriesCompanion Function({
   Value<int> id,
   required int orderId,
@@ -4558,6 +5250,8 @@ class $AppDatabaseManager {
       $$ProductCodeMappingsTableTableManager(_db, _db.productCodeMappings);
   $$BarcodeReadsTableTableManager get barcodeReads =>
       $$BarcodeReadsTableTableManager(_db, _db.barcodeReads);
+  $$BoxesTableTableManager get boxes =>
+      $$BoxesTableTableManager(_db, _db.boxes);
   $$DeliveriesTableTableManager get deliveries =>
       $$DeliveriesTableTableManager(_db, _db.deliveries);
   $$DeliveryItemsTableTableManager get deliveryItems =>

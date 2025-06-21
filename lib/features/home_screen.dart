@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_count_track/features/order_management/presentation/screens/order_list_screen.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_count_track/core/database/database_provider.dart';
 import 'package:flutter_count_track/features/dashboard/presentation/screens/dashboard_screen.dart';
+import 'package:flutter_count_track/features/order_management/presentation/screens/order_list_screen.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
@@ -38,7 +41,7 @@ class HomeScreen extends StatelessWidget {
 
                       // Ana menü kartları
                       Expanded(
-                        child: _buildMainMenuGrid(context),
+                        child: _buildMainMenuGrid(context, ref),
                       ),
 
                       // Alt bilgi
@@ -167,7 +170,7 @@ class HomeScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMainMenuGrid(BuildContext context) {
+  Widget _buildMainMenuGrid(BuildContext context, WidgetRef ref) {
     return GridView.count(
       crossAxisCount: 4,
       crossAxisSpacing: 20,
@@ -230,6 +233,80 @@ class HomeScreen extends StatelessWidget {
               const SnackBar(
                 content: Text('Ayarlar modülü yakında eklenecek'),
                 backgroundColor: Colors.purple,
+              ),
+            );
+          },
+        ),
+        // Debug butonu
+        _buildMenuCard(
+          context: context,
+          title: 'DB Reset',
+          subtitle: 'Veritabanını Sıfırla (Debug)',
+          icon: Icons.refresh,
+          color: Colors.red,
+          onTap: () async {
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Veritabanını Sıfırla'),
+                content: const Text(
+                    'Bu işlem tüm verileri silip yeni örnek veriler oluşturacak. Devam etmek istiyor musunuz?'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('İptal'),
+                  ),
+                  ElevatedButton.icon(
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      // Loading göster
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (context) => const Center(
+                          child: CircularProgressIndicator(),
+                        ),
+                      );
+
+                      try {
+                        // Database reset
+                        final db = ref.read(appDatabaseProvider);
+                        await db.resetDatabase();
+
+                        Navigator.pop(context); // Loading'i kapat
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('✅ Veritabanı başarıyla sıfırlandı!'),
+                            backgroundColor: Colors.green,
+                          ),
+                        );
+                      } catch (e) {
+                        Navigator.pop(context); // Loading'i kapat
+
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(
+                            content: Text('❌ Hata: $e'),
+                            backgroundColor: Colors.red,
+                            action: SnackBarAction(
+                              label: 'Kopyala ',
+                              onPressed: () {
+                                Clipboard.setData(
+                                    ClipboardData(text: e.toString()));
+                              },
+                            ),
+                          ),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Sıfırla'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ],
               ),
             );
           },

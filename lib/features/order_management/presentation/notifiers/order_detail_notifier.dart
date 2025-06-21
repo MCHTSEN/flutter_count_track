@@ -1,8 +1,8 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_count_track/core/database/app_database.dart'; // For Order, OrderItem, OrderStatus
 import 'package:flutter_count_track/features/order_management/domain/repositories/order_repository.dart';
 // Assuming a provider for OrderRepository is defined elsewhere, e.g., order_providers.dart
 import 'package:flutter_count_track/features/order_management/presentation/notifiers/order_providers.dart'; // Placeholder for actual provider
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 // Ürün ve barkod bilgilerini içeren yardımcı sınıf
 class OrderItemDetail {
@@ -22,12 +22,14 @@ class OrderDetailState {
   final bool isLoading;
   final Order? order;
   final List<OrderItemDetail>? orderItemDetails;
+  final List<BarcodeRead>? barcodeHistory;
   final String? errorMessage;
 
   const OrderDetailState({
     this.isLoading = false,
     this.order,
     this.orderItemDetails,
+    this.barcodeHistory,
     this.errorMessage,
   });
 
@@ -35,6 +37,7 @@ class OrderDetailState {
     bool? isLoading,
     Order? order,
     List<OrderItemDetail>? orderItemDetails,
+    List<BarcodeRead>? barcodeHistory,
     String? errorMessage,
     bool clearError = false, // Utility to easily clear error message
   }) {
@@ -42,6 +45,7 @@ class OrderDetailState {
       isLoading: isLoading ?? this.isLoading,
       order: order ?? this.order,
       orderItemDetails: orderItemDetails ?? this.orderItemDetails,
+      barcodeHistory: barcodeHistory ?? this.barcodeHistory,
       errorMessage: clearError ? null : errorMessage ?? this.errorMessage,
     );
   }
@@ -103,8 +107,16 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
         print(
             '📊 OrderDetail: Products found: ${itemDetails.where((d) => d.product != null).length}/${itemDetails.length}');
 
+        // Barkod geçmişini getir
+        final barcodeHistory =
+            await _orderRepository.getBarcodeHistory(_orderCode);
+        print('📖 OrderDetail: Found ${barcodeHistory.length} barcode reads');
+
         state = state.copyWith(
-            isLoading: false, order: order, orderItemDetails: itemDetails);
+            isLoading: false,
+            order: order,
+            orderItemDetails: itemDetails,
+            barcodeHistory: barcodeHistory);
       } else {
         print('❌ OrderDetail: Order not found');
         state = state.copyWith(

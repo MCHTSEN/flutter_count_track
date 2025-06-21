@@ -71,8 +71,11 @@ abstract class BarcodeRepository {
   /// Sipariş kaleminin taranan miktarını günceller
   Future<void> updateOrderItemScannedQuantity(int orderItemId, int newScannedQuantity);
   
-  /// Barkod okuma işlemini kaydeder
-  Future<void> logBarcodeRead(int orderId, int? productId, String barcode);
+  /// Barkod okuma işlemini kaydeder ve log ID'sini döndürür
+  Future<int> logBarcodeRead(int orderId, int? productId, String barcode, {int? boxNumber});
+
+  /// Var olan bir barkod kaydını ürün ID'si ile günceller
+  Future<void> updateBarcodeReadWithProductId(int logId, int productId);
   
   /// Benzersiz barkodun daha önce taranıp taranmadığını kontrol eder
   Future<bool> isUniqueBarcodeAlreadyScanned(int orderId, int productId, String barcode);
@@ -94,17 +97,19 @@ class ProcessBarcodeUseCase {
     required int orderId,
     required String barcode,
     required String customerName,
+    int? boxNumber,
   })
 }
 ```
 
-**İşlem Sırası:**
-1. Barkod okuma kaydı oluştur
-2. Barkoda karşılık gelen ürünü bul (doğrudan barkod veya müşteri kod eşleştirmesi)
-3. Ürünün siparişte olup olmadığını kontrol et
-4. Benzersiz barkod kontrolü (gerekiyorsa)
-5. Sipariş kaleminin taranan miktarını artır
-6. Sipariş durumunu güncelle (kısmen/tamamen tamamlandı)
+**İşlem Sırası (Güncellenmiş Mantık):**
+1. Barkoda karşılık gelen ürünü bul (doğrudan barkod veya müşteri kod eşleştirmesi). Ürün bulunamazsa, denemeyi kaydet ve süreci sonlandır.
+2. Ürünün siparişte olup olmadığını kontrol et.
+3. Ürün için benzersiz barkod kontrolü yap (eğer ürün bunu gerektiriyorsa). Tekrar eden barkod ise süreci sonlandır.
+4. Sipariş kaleminin miktarının dolup dolmadığını kontrol et. Doluysa süreci sonlandır.
+5. **Tüm kontrollerden geçerse**, barkod okuma kaydını veritabanına **tek seferde** oluştur.
+6. Sipariş kaleminin taranan miktarını artır.
+7. Sipariş durumunu güncelle (kısmen/tamamen tamamlandı).
 
 ## Data Katmanı
 

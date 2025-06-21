@@ -18,14 +18,12 @@ class ProcessBarcodeUseCase {
     required int orderId,
     required String barcode,
     required String customerName,
+    int? boxNumber,
   }) async {
     print(
         '🔄 ProcessBarcode: Başlıyor - OrderId: $orderId, Barkod: $barcode, Müşteri: $customerName');
 
-    // Barkodu kaydet (hangi ürüne ait olduğunu henüz bilmiyoruz)
-    await _barcodeRepository.logBarcodeRead(orderId, null, barcode);
-
-    // Barkoda karşılık gelen ürünü bul
+    // 1. Barkoda karşılık gelen ürünü bul
     final product = await _barcodeRepository.findProductByCustomerCode(
       barcode,
       customerName,
@@ -33,12 +31,15 @@ class ProcessBarcodeUseCase {
 
     if (product == null) {
       print('❌ ProcessBarcode: Ürün bulunamadı');
+      // Ürün bulunamasa bile okuma denemesini kaydet
+      await _barcodeRepository.logBarcodeRead(orderId, null, barcode,
+          boxNumber: boxNumber);
       return BarcodeProcessResult.productNotFound;
     }
 
     print('✅ ProcessBarcode: Ürün bulundu: ${product.ourProductCode}');
 
-    // Ürünün mevcut siparişte olup olmadığını kontrol et
+    // 2. Ürünün mevcut siparişte olup olmadığını kontrol et
     final orderItem = await _barcodeRepository.findOrderItemByProductId(
       orderId,
       product.id,
@@ -52,10 +53,7 @@ class ProcessBarcodeUseCase {
     print(
         '✅ ProcessBarcode: Sipariş kalemi bulundu: ${orderItem.scannedQuantity}/${orderItem.quantity}');
 
-    // Barkod kaydını ürün ID'si ile güncelle
-    await _barcodeRepository.logBarcodeRead(orderId, product.id, barcode);
-
-    // Ürün için benzersiz barkod kontrolü gerekiyorsa kontrol et
+    // 3. Ürün için benzersiz barkod kontrolü (gerekliyse)
     if (product.isUniqueBarcodeRequired) {
       final isDuplicate =
           await _barcodeRepository.isUniqueBarcodeAlreadyScanned(
@@ -70,8 +68,12 @@ class ProcessBarcodeUseCase {
       }
     }
 
-    // Siparişteki okunan miktarı artır (eğer hala tamamlanmadıysa)
+    // 4. Siparişteki okunan miktarı artır (eğer hala tamamlanmadıysa)
     if (orderItem.scannedQuantity < orderItem.quantity) {
+      // 5. Tüm kontrollerden geçtiyse barkodu kaydet
+      await _barcodeRepository.logBarcodeRead(orderId, product.id, barcode,
+          boxNumber: boxNumber);
+
       final newScannedQuantity = orderItem.scannedQuantity + 1;
       await _barcodeRepository.updateOrderItemScannedQuantity(
         orderItem.id,
@@ -81,14 +83,13 @@ class ProcessBarcodeUseCase {
       print(
           '✅ ProcessBarcode: Miktar güncellendi: $newScannedQuantity/${orderItem.quantity}');
 
-      // Siparişin tamamlanıp tamamlanmadığını kontrol et
+      // Siparişin durumunu güncelle (kısmi veya tamamlandı)
       final isComplete = await _barcodeRepository.checkIfOrderComplete(orderId);
       if (isComplete) {
         await _barcodeRepository.updateOrderStatus(
             orderId, OrderStatus.completed);
         print('🎉 ProcessBarcode: Sipariş tamamlandı!');
       } else {
-        // En az bir ürün okunduysa kısmen tamamlandı olarak güncelle
         await _barcodeRepository.updateOrderStatus(
             orderId, OrderStatus.partial);
         print('📦 ProcessBarcode: Sipariş kısmen tamamlandı');

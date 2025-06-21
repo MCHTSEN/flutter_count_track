@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_count_track/core/database/app_database.dart';
 import 'package:flutter_count_track/core/database/database_provider.dart';
 import 'package:flutter_count_track/features/barcode_scanning/data/repositories/barcode_repository_impl.dart';
 import 'package:flutter_count_track/features/barcode_scanning/data/services/sound_service.dart';
-import 'package:flutter_count_track/features/barcode_scanning/domain/repositories/barcode_repository.dart';
 import 'package:flutter_count_track/features/barcode_scanning/domain/usecases/process_barcode_usecase.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 enum BarcodeStatus {
   none,
@@ -51,6 +49,7 @@ class BarcodeNotifier extends StateNotifier<BarcodeState> {
     required int orderId,
     required String customerName,
     required VoidCallback onOrderUpdated,
+    int? boxNumber,
   }) async {
     if (state.isProcessing) return;
 
@@ -60,6 +59,7 @@ class BarcodeNotifier extends StateNotifier<BarcodeState> {
       orderId: orderId,
       barcode: barcode,
       customerName: customerName,
+      boxNumber: boxNumber,
     );
 
     String message;

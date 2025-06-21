@@ -13,7 +13,9 @@ abstract class BarcodeRepository {
       int orderItemId, int newScannedQuantity);
 
   /// Barkod okuma işlemini kaydeder
-  Future<void> logBarcodeRead(int orderId, int? productId, String barcode);
+  Future<int> logBarcodeRead(int orderId, int? productId, String barcode,
+      {int? boxNumber});
+  Future<void> updateBarcodeReadWithProductId(int logId, int productId);
 
   /// Benzersiz barkodun daha önce taranıp taranmadığını kontrol eder
   Future<bool> isUniqueBarcodeAlreadyScanned(

@@ -118,6 +118,14 @@ class OrderRepositoryImpl implements OrderRepository {
   Stream<Order> watchOrderById(int id)
   Stream<List<OrderItem>> watchOrderItems(int orderId)
   
+  // Diğer Metotlar
+  Future<List<BarcodeRead>> getBarcodeHistory(String orderCode, {int? limit});
+  Future<Product?> getProductById(int productId);
+  Future<ProductCodeMapping?> getProductCodeMapping(
+      int productId, String customerName);
+  Future<List<Map<String, dynamic>>> getBoxContents(String orderCode);
+
+
   // Excel entegrasyonu
   Future<void> createOrderWithItems({
     required model_order.Order orderData,

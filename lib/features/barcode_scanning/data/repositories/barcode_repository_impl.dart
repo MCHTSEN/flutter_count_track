@@ -65,16 +65,25 @@ class BarcodeRepositoryImpl implements BarcodeRepository {
   }
 
   @override
-  Future<void> logBarcodeRead(
-      int orderId, int? productId, String barcode) async {
-    await database.into(database.barcodeReads).insert(
+  Future<int> logBarcodeRead(int orderId, int? productId, String barcode,
+      {int? boxNumber}) async {
+    return await database.into(database.barcodeReads).insert(
           BarcodeReadsCompanion.insert(
             orderId: orderId,
             productId:
                 productId == null ? const Value.absent() : Value(productId),
             barcode: barcode,
+            boxNumber:
+                boxNumber == null ? const Value.absent() : Value(boxNumber),
           ),
         );
+  }
+
+  @override
+  Future<void> updateBarcodeReadWithProductId(int logId, int productId) async {
+    await (database.update(database.barcodeReads)
+          ..where((tbl) => tbl.id.equals(logId)))
+        .write(BarcodeReadsCompanion(productId: Value(productId)));
   }
 
   @override

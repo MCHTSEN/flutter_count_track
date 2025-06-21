@@ -1,10 +1,10 @@
 import 'package:drift/drift.dart';
 import 'package:flutter_count_track/core/database/app_database.dart';
-import 'package:flutter_count_track/features/order_management/domain/repositories/order_repository.dart';
 import 'package:flutter_count_track/features/order_management/data/models/order.dart'
     as model_order;
 import 'package:flutter_count_track/features/order_management/data/models/order_item.dart'
     as model_order_item;
+import 'package:flutter_count_track/features/order_management/domain/repositories/order_repository.dart';
 
 class OrderRepositoryImpl implements OrderRepository {
   final AppDatabase _db;
@@ -264,5 +264,89 @@ class OrderRepositoryImpl implements OrderRepository {
     return await (_db.select(_db.productCodeMappings)
           ..where((pcm) => pcm.productId.equals(productId)))
         .get();
+  }
+
+  @override
+  Future<List<BarcodeRead>> getBarcodeHistory(String orderCode,
+      {int? limit}) async {
+    final order = await getOrderById(orderCode);
+    if (order == null) return [];
+
+    final query = _db.select(_db.barcodeReads)
+      ..where((b) => b.orderId.equals(order.id))
+      ..orderBy(
+          [(b) => OrderingTerm(expression: b.readAt, mode: OrderingMode.desc)]);
+
+    if (limit != null) {
+      query.limit(limit);
+    }
+
+    return await query.get();
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getBoxContents(String orderCode) async {
+    final order = await getOrderById(orderCode);
+    if (order == null) return [];
+
+    final barcodeReads = await (_db.select(_db.barcodeReads)
+          ..where((b) => b.orderId.equals(order.id))
+          ..where((b) => b.productId.isNotNull()))
+        .get();
+
+    if (barcodeReads.isEmpty) return [];
+
+    final allProducts = await (_db.select(_db.products)).get();
+    final productMap = {for (var p in allProducts) p.id: p};
+
+    final Map<int, Map<int, Map<String, dynamic>>> groupedByBox = {};
+
+    for (var read in barcodeReads) {
+      final boxNum = read.boxNumber;
+      final prodId = read.productId;
+      if (boxNum == null || prodId == null) continue;
+
+      final product = productMap[prodId];
+      if (product == null) continue;
+
+      groupedByBox.putIfAbsent(boxNum, () => {});
+      final boxContent = groupedByBox[boxNum]!;
+
+      boxContent.putIfAbsent(
+          prodId,
+          () => {
+                'productId': prodId,
+                'productCode': product.ourProductCode,
+                'productName': product.name,
+                'barcode': product.barcode,
+                'quantity': 0,
+                'timestamps': <DateTime>[],
+              });
+
+      final productEntry = boxContent[prodId]!;
+      productEntry['quantity'] = (productEntry['quantity'] as int) + 1;
+      (productEntry['timestamps'] as List<DateTime>).add(read.readAt);
+    }
+
+    final List<Map<String, dynamic>> result = [];
+    groupedByBox.forEach((boxNumber, contents) {
+      final contentList = contents.values.toList();
+      for (var item in contentList) {
+        (item['timestamps'] as List<DateTime>).sort((a, b) => b.compareTo(a));
+        item['timestamp'] = (item['timestamps'] as List<DateTime>).first;
+      }
+
+      contentList.sort((a, b) =>
+          (b['timestamp'] as DateTime).compareTo(a['timestamp'] as DateTime));
+
+      result.add({
+        'boxNumber': boxNumber,
+        'contents': contentList,
+      });
+    });
+
+    result.sort((a, b) => (a['boxNumber'] as int).compareTo(b['boxNumber']));
+
+    return result;
   }
 }
