@@ -1,11 +1,11 @@
-simport 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_count_track/features/dashboard/presentation/providers/dashboard_providers.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_count_track/core/utils/sample_data_generator.dart';
+import 'package:flutter_count_track/features/dashboard/presentation/components/charts_section.dart';
 import 'package:flutter_count_track/features/dashboard/presentation/components/dashboard_header.dart';
 import 'package:flutter_count_track/features/dashboard/presentation/components/dashboard_state_widgets.dart';
 import 'package:flutter_count_track/features/dashboard/presentation/components/stats_section.dart';
-import 'package:flutter_count_track/features/dashboard/presentation/components/charts_section.dart';
-import 'package:flutter_count_track/core/utils/sample_data_generator.dart';
+import 'package:flutter_count_track/features/dashboard/presentation/providers/dashboard_providers.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
