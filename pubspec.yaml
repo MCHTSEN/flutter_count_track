@@ -40,6 +40,12 @@ dependencies:
   intl: ^0.19.0
   collection: ^1.18.0
 
+  # Firebase Dependencies
+  firebase_core: ^3.8.0
+  cloud_firestore: ^5.5.0
+  # firebase_auth: ^5.3.3
+  connectivity_plus: ^6.1.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
