@@ -15,7 +15,7 @@ dependencies:
 
   # Database
   drift: ^2.14.0
-  sqlite3_flutter_libs: ^0.5.0
+  sqlite3: ^2.7.6
   path_provider: ^2.0.0
   path: ^1.8.0
 
@@ -27,17 +27,16 @@ dependencies:
   printing: ^5.11.1
 
   # File Operations
-  file_picker: ^6.1.1
-  open_file: ^3.3.2
+  file_picker: ^10.2.0
 
   # Audio
-  audioplayers: ^5.2.1
+  audioplayers: ^6.5.0
 
   # Charts
-  syncfusion_flutter_charts: ^26.2.14
+  syncfusion_flutter_charts: ^29.1.38
 
   # Utils
-  intl: ^0.19.0
+  intl: ^0.20.2
   collection: ^1.18.0
 
   # Firebase Dependencies
@@ -49,9 +48,8 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
-  flutter_lints: ^3.0.1
+  flutter_lints: ^5.0.0
   build_runner: ^2.4.7
-  riverpod_generator: ^2.3.9
   drift_dev: ^2.14.1
 
 flutter:

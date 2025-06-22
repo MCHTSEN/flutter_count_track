@@ -46,3 +46,7 @@ app.*.map.json
 
 .cursorrules
 /docs
+
+firebase.json
+firebase_options.dart
+google-services.json
