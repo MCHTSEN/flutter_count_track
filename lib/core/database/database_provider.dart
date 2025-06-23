@@ -1,6 +1,7 @@
+import 'package:flutter_count_track/core/database/app_database.dart';
+import 'package:flutter_count_track/core/services/supabase_service.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
-import 'app_database.dart'; // Assuming app_database.dart is in the same directory
+import 'package:logging/logging.dart';
 
 // Provider for the AppDatabase instance
 final appDatabaseProvider = Provider<AppDatabase>((ref) {
@@ -37,4 +38,34 @@ final resetDatabaseProvider = FutureProvider<void>((ref) async {
   await db.resetDatabase();
 
   print('🎉 DatabaseProvider: Database reset completed!');
+});
+
+/// Supabase sync service provider'ı
+final supabaseSyncServiceProvider = Provider<SupabaseSyncService>((ref) {
+  final localDb = ref.watch(appDatabaseProvider);
+
+  // Supabase client'ı almaya çalış
+  try {
+    final supabaseClient = SupabaseService.client;
+    return SupabaseSyncService(
+      localDatabase: localDb,
+      supabaseClient: supabaseClient,
+    );
+  } catch (e) {
+    // Supabase henüz başlatılmamışsa null döndür
+    throw StateError('Supabase henüz başlatılmadı: $e');
+  }
+});
+
+/// Logger provider'ı
+final loggerProvider = Provider.family<Logger, String>((ref, name) {
+  return Logger(name);
+});
+
+/// Connectivity provider'ı
+final connectivityProvider = StreamProvider<bool>((ref) {
+  // SupabaseService'den connectivity stream'ini al
+  return Stream.periodic(const Duration(seconds: 5))
+      .map((_) => SupabaseService.isOnline)
+      .distinct();
 });

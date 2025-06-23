@@ -626,7 +626,6 @@ class AppDatabase extends _$AppDatabase {
   /// Public method - Veritabanını sıfırlayıp yeniden oluştur (debug amaçlı)
   Future<void> resetDatabase() async {
     await _clearAllData();
-    await _initializeSampleData();
   }
 }
 

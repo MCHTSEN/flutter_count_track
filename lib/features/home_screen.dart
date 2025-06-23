@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_count_track/core/database/database_provider.dart';
 import 'package:flutter_count_track/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:flutter_count_track/features/order_management/presentation/screens/order_list_screen.dart';
+import 'package:flutter_count_track/features/supabase_test_screen.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 class HomeScreen extends ConsumerWidget {
@@ -209,6 +210,21 @@ class HomeScreen extends ConsumerWidget {
         ),
         _buildMenuCard(
           context: context,
+          title: 'Supabase Test',
+          subtitle: 'Supabase Bağlantı ve Veri Testi',
+          icon: Icons.cloud_sync,
+          color: Colors.teal,
+          onTap: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const SupabaseTestScreen(),
+              ),
+            );
+          },
+        ),
+        _buildMenuCard(
+          context: context,
           title: 'Raporlar',
           subtitle: 'Detaylı Raporlar ve Analizler',
           icon: Icons.analytics,
@@ -218,21 +234,6 @@ class HomeScreen extends ConsumerWidget {
               const SnackBar(
                 content: Text('Raporlar modülü yakında eklenecek'),
                 backgroundColor: Colors.orange,
-              ),
-            );
-          },
-        ),
-        _buildMenuCard(
-          context: context,
-          title: 'Ayarlar',
-          subtitle: 'Sistem Ayarları ve Konfigürasyon',
-          icon: Icons.settings,
-          color: Colors.purple,
-          onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('Ayarlar modülü yakında eklenecek'),
-                backgroundColor: Colors.purple,
               ),
             );
           },

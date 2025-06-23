@@ -2,7 +2,15 @@
 
 ## Genel Bakış
 
-Database modülü, Paketleme Takip Sistemi'nin merkezi veri yönetim katmanıdır. Drift ORM kullanarak SQLite veritabanı ile etkileşim sağlar ve tüm uygulama verilerini yönetir.
+Database modülü, Paketleme Takip Sistemi'nin merkezi veri yönetim katmanıdır. Drift ORM kullanarak SQLite veritabanı ile etkileşim sağlar ve tüm uygulama verilerini yönetir. **v2.0** ile birlikte **Supabase** entegrasyonu ve **offline-first hybrid sync** sistemi eklenmiştir.
+
+### Yeni Özellikler (v2.0)
+- ✅ **Supabase Entegrasyonu**: Cloud database sync desteği
+- ✅ **Offline-First Architecture**: İnternet olmadan tam işlevsellik
+- ✅ **Hybrid Sync System**: Local ↔ Remote senkronizasyon
+- ✅ **Conflict Resolution**: Veri çakışmalarının otomatik çözümü
+- ✅ **Real-time Updates**: Anlık veri güncellemeleri
+- ✅ **Comprehensive Logging**: Detaylı database işlem logları
 
 ## Modül Yapısı
 

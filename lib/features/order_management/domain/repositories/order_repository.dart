@@ -12,6 +12,8 @@ abstract class OrderRepository {
   });
   Future<Order?> getOrderById(
       String orderId); // Use String for ID consistency with UI/Notifier
+  Future<Order?> getOrderByCode(
+      String orderCode); // Sipariş kodu ile sipariş getir
   Future<int> createOrder(
       OrdersCompanion order); // Added back for OrderNotifier
   Future<bool> updateOrder(Order order); // Keep for general updates if needed
@@ -20,6 +22,10 @@ abstract class OrderRepository {
   // Order Item Operations
   Future<List<OrderItem>> getOrderItems(
       String orderId); // Use String for ID consistency
+  Future<OrderItem?> getOrderItemById(
+      String orderItemId); // Sipariş kalemi getir
+  Future<int> createOrderItem(
+      OrderItemsCompanion orderItem); // Sipariş kalemi oluştur
   Future<bool> updateOrderItemScannedQuantity(
       String orderItemId, int newQuantity); // Use String ID
 

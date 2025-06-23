@@ -1,21 +1,32 @@
 import 'package:drift/drift.dart';
 import 'package:flutter_count_track/core/database/app_database.dart';
+import 'package:flutter_count_track/core/services/supabase_service.dart';
 import 'package:flutter_count_track/features/order_management/data/models/order.dart'
     as model_order;
 import 'package:flutter_count_track/features/order_management/data/models/order_item.dart'
     as model_order_item;
 import 'package:flutter_count_track/features/order_management/domain/repositories/order_repository.dart';
+import 'package:logging/logging.dart';
 
 class OrderRepositoryImpl implements OrderRepository {
   final AppDatabase _db;
+  late final SupabaseSyncService? _syncService;
+  static final Logger _logger = Logger('OrderRepositoryImpl');
 
-  OrderRepositoryImpl(this._db);
+  OrderRepositoryImpl(this._db, [SupabaseSyncService? syncService]) {
+    _syncService = syncService;
+    _logger.info('OrderRepositoryImpl oluşturuldu');
+  }
 
   @override
   Future<List<Order>> getOrders({
     String? searchQuery,
     OrderStatus? filterStatus,
   }) async {
+    _logger.info(
+        '📖 Siparişler getiriliyor - Arama: $searchQuery, Durum: $filterStatus');
+
+    // Önce lokal verileri al (offline-first)
     var query = _db.select(_db.orders);
 
     if (searchQuery != null && searchQuery.isNotEmpty) {
@@ -31,11 +42,113 @@ class OrderRepositoryImpl implements OrderRepository {
       ..orderBy([
         (o) => OrderingTerm(expression: o.createdAt, mode: OrderingMode.desc)
       ]);
-    return await query.get();
+
+    final localOrders = await query.get();
+    _logger.info('📖 ${localOrders.length} sipariş local database\'den alındı');
+
+    // Eğer online ise ve sync service varsa, arka planda Supabase'den güncellemeleri al
+    if (SupabaseService.isOnline && _syncService != null) {
+      _logger.info('🔄 Online - Arka planda Supabase sync\'i başlatılıyor');
+      _syncOrdersInBackground(searchQuery, filterStatus);
+    }
+
+    return localOrders;
+  }
+
+  /// Arka planda Supabase'den siparişleri sync eder
+  Future<void> _syncOrdersInBackground(
+      String? searchQuery, OrderStatus? filterStatus) async {
+    try {
+      _logger.info('🔄 Arka plan sync başlatıldı');
+
+      if (_syncService == null) {
+        _logger.warning('⚠️ Sync service mevcut değil');
+        return;
+      }
+
+      // Supabase'den siparişleri çek
+      final remoteOrders = await _syncService.fetchOrdersFromSupabase(
+        searchQuery: searchQuery,
+        status: filterStatus?.name,
+      );
+
+      // Her remote order için local ile karşılaştır ve gerekirse güncelle
+      for (final remoteOrderData in remoteOrders) {
+        await _syncSingleOrder(remoteOrderData);
+      }
+
+      _logger.info('✅ Arka plan sync tamamlandı');
+    } catch (e, stackTrace) {
+      _logger.severe('💥 Arka plan sync hatası', e, stackTrace);
+    }
+  }
+
+  /// Tek bir siparişi sync eder
+  Future<void> _syncSingleOrder(Map<String, dynamic> remoteOrderData) async {
+    try {
+      final orderCode = remoteOrderData['order_code'] as String;
+      final localOrder = await getOrderById(orderCode);
+
+      if (localOrder == null) {
+        // Local'de yok, ekle
+        _logger.info('📥 Yeni sipariş local\'e ekleniyor: $orderCode');
+        await _insertOrderFromRemote(remoteOrderData);
+      } else {
+        // Local'de var, timestamp'leri karşılaştır
+        final remoteUpdatedAt = DateTime.parse(remoteOrderData['updated_at']);
+        if (remoteUpdatedAt.isAfter(localOrder.updatedAt)) {
+          _logger.info(
+              '🔄 Remote sipariş daha güncel, local güncelleniyor: $orderCode');
+          await _updateOrderFromRemote(localOrder, remoteOrderData);
+        }
+      }
+    } catch (e, stackTrace) {
+      _logger.severe('💥 Tek sipariş sync hatası', e, stackTrace);
+    }
+  }
+
+  /// Remote'dan gelen veriyi local'e ekler
+  Future<void> _insertOrderFromRemote(
+      Map<String, dynamic> remoteOrderData) async {
+    final orderCompanion = OrdersCompanion(
+      orderCode: Value(remoteOrderData['order_code']),
+      customerName: Value(remoteOrderData['customer_name']),
+      status: Value(_parseOrderStatus(remoteOrderData['status'])),
+      createdAt: Value(DateTime.parse(remoteOrderData['created_at'])),
+      updatedAt: Value(DateTime.parse(remoteOrderData['updated_at'])),
+    );
+
+    await _db.into(_db.orders).insert(orderCompanion);
+  }
+
+  /// Remote'dan gelen veri ile local order'ı günceller
+  Future<void> _updateOrderFromRemote(
+      Order localOrder, Map<String, dynamic> remoteOrderData) async {
+    await (_db.update(_db.orders)..where((o) => o.id.equals(localOrder.id)))
+        .write(OrdersCompanion(
+      customerName: Value(remoteOrderData['customer_name']),
+      status: Value(_parseOrderStatus(remoteOrderData['status'])),
+      updatedAt: Value(DateTime.parse(remoteOrderData['updated_at'])),
+    ));
+  }
+
+  /// String'den OrderStatus'e çevirir
+  OrderStatus _parseOrderStatus(String statusString) {
+    return OrderStatus.values.firstWhere(
+      (status) => status.name == statusString,
+      orElse: () => OrderStatus.pending,
+    );
   }
 
   @override
   Future<Order?> getOrderById(String orderCode) async {
+    return await (_db.select(_db.orders)
+          ..where((o) => o.orderCode.equals(orderCode)))
+        .getSingleOrNull();
+  }
+
+  @override
+  Future<Order?> getOrderByCode(String orderCode) async {
     return await (_db.select(_db.orders)
           ..where((o) => o.orderCode.equals(orderCode)))
         .getSingleOrNull();
@@ -79,6 +192,16 @@ class OrderRepositoryImpl implements OrderRepository {
   }
 
   @override
+  Future<OrderItem?> getOrderItemById(String orderItemId) async {
+    final itemId = int.tryParse(orderItemId);
+    if (itemId == null) return null;
+
+    return await (_db.select(_db.orderItems)
+          ..where((oi) => oi.id.equals(itemId)))
+        .getSingleOrNull();
+  }
+
+  @override
   Future<int> createOrderItem(OrderItemsCompanion orderItem) async {
     return await _db.into(_db.orderItems).insert(orderItem);
   }
@@ -86,16 +209,97 @@ class OrderRepositoryImpl implements OrderRepository {
   @override
   Future<bool> updateOrderItemScannedQuantity(
       String orderItemId, int newQuantity) async {
+    _logger.info(
+        '📝 Sipariş kalemi taranan miktar güncelleniyor - ID: $orderItemId, Miktar: $newQuantity');
+
     final itemId = int.tryParse(orderItemId);
     if (itemId == null) {
-      print("Error: orderItemId '$orderItemId' is not a valid integer for PK.");
+      _logger.severe(
+          "💥 Hata: orderItemId '$orderItemId' geçerli bir integer değil");
       return false;
     }
 
-    final affectedRows = await (_db.update(_db.orderItems)
-          ..where((oi) => oi.id.equals(itemId)))
-        .write(OrderItemsCompanion(scannedQuantity: Value(newQuantity)));
-    return affectedRows > 0;
+    try {
+      // Önce local'i güncelle (offline-first)
+      final affectedRows = await (_db.update(_db.orderItems)
+            ..where((oi) => oi.id.equals(itemId)))
+          .write(OrderItemsCompanion(
+        scannedQuantity: Value(newQuantity),
+      ));
+
+      if (affectedRows > 0) {
+        _logger.info('✅ Local sipariş kalemi güncellendi - ID: $orderItemId');
+
+        // Eğer online ise ve sync service varsa, Supabase'e de gönder
+        if (SupabaseService.isOnline && _syncService != null) {
+          _logger.info('📤 Supabase\'e barkod okuma gönderiliyor');
+          _pushBarcodeReadToSupabase(orderItemId, newQuantity);
+        } else {
+          _logger.warning(
+              '⚠️ Offline durumda - barkod okuma daha sonra sync edilecek');
+          // TODO: Sync kuyruğuna ekle
+        }
+
+        return true;
+      } else {
+        _logger.warning(
+            '⚠️ Hiçbir sipariş kalemi güncellenmedi - ID: $orderItemId');
+        return false;
+      }
+    } catch (e, stackTrace) {
+      _logger.severe('💥 Sipariş kalemi güncelleme hatası', e, stackTrace);
+      return false;
+    }
+  }
+
+  /// Barkod okuma verilerini Supabase'e gönderir (arka planda)
+  Future<void> _pushBarcodeReadToSupabase(
+      String orderItemId, int newQuantity) async {
+    try {
+      if (_syncService == null) {
+        _logger.warning('⚠️ Sync service mevcut değil');
+        return;
+      }
+
+      // Order item'ı bul
+      final itemId = int.parse(orderItemId);
+      final orderItem = await (_db.select(_db.orderItems)
+            ..where((oi) => oi.id.equals(itemId)))
+          .getSingleOrNull();
+
+      if (orderItem == null) {
+        _logger.warning('⚠️ Sipariş kalemi bulunamadı - ID: $orderItemId');
+        return;
+      }
+
+      // Order'ı bul
+      final order = await (_db.select(_db.orders)
+            ..where((o) => o.id.equals(orderItem.orderId)))
+          .getSingleOrNull();
+
+      if (order == null) {
+        _logger
+            .warning('⚠️ Sipariş bulunamadı - Order ID: ${orderItem.orderId}');
+        return;
+      }
+
+      // Product'ı bul (barcode için)
+      final product = await (_db.select(_db.products)
+            ..where((p) => p.id.equals(orderItem.productId)))
+          .getSingleOrNull();
+
+      // Supabase'e barkod okuma gönder
+      await _syncService.pushBarcodeReadToSupabase(
+        orderCode: order.orderCode,
+        barcode: product?.barcode ?? 'UNKNOWN_BARCODE',
+        productId: orderItem.productId,
+        scannedQuantity: newQuantity,
+      );
+
+      _logger.info('✅ Barkod okuma Supabase\'e gönderildi');
+    } catch (e, stackTrace) {
+      _logger.severe('💥 Supabase barkod okuma gönderme hatası', e, stackTrace);
+    }
   }
 
   @override

@@ -1,43 +1,59 @@
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_count_track/core/database/app_database.dart';
+import 'package:flutter_count_track/core/database/database_provider.dart';
+import 'package:flutter_count_track/core/services/supabase_service.dart';
+import 'package:flutter_count_track/features/order_management/data/services/excel_import_service.dart';
 import 'package:flutter_count_track/features/order_management/domain/repositories/order_repository.dart';
 import 'package:flutter_count_track/features/order_management/presentation/notifiers/order_providers.dart';
-import 'package:flutter_count_track/features/order_management/data/services/excel_import_service.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:logging/logging.dart';
 
 // State class for order management
 class OrderState {
   final List<Order> orders;
+  final List<Map<String, dynamic>>
+      supabaseOrders; // Supabase'den gelen ham veriler
   final bool isLoading;
+  final bool isSyncing;
   final String? error;
   final Map<String, dynamic>? selectedOrderSummary;
   final String? successMessage;
+  final DateTime? lastSyncTime;
 
   const OrderState({
     this.orders = const [],
+    this.supabaseOrders = const [],
     this.isLoading = false,
+    this.isSyncing = false,
     this.error,
     this.selectedOrderSummary,
     this.successMessage,
+    this.lastSyncTime,
   });
 
   OrderState copyWith({
     List<Order>? orders,
+    List<Map<String, dynamic>>? supabaseOrders,
     bool? isLoading,
+    bool? isSyncing,
     String? error,
     Map<String, dynamic>? selectedOrderSummary,
     bool clearSelectedOrderSummary = false,
     String? successMessage,
     bool clearError = false,
     bool clearSuccessMessage = false,
+    DateTime? lastSyncTime,
   }) {
     return OrderState(
       orders: orders ?? this.orders,
+      supabaseOrders: supabaseOrders ?? this.supabaseOrders,
       isLoading: isLoading ?? this.isLoading,
+      isSyncing: isSyncing ?? this.isSyncing,
       error: clearError ? null : error,
       selectedOrderSummary: clearSelectedOrderSummary
           ? null
           : selectedOrderSummary ?? this.selectedOrderSummary,
       successMessage: clearSuccessMessage ? null : successMessage,
+      lastSyncTime: lastSyncTime ?? this.lastSyncTime,
     );
   }
 }
@@ -45,21 +61,37 @@ class OrderState {
 class OrderNotifier extends StateNotifier<OrderState> {
   final OrderRepository _repository;
   final ExcelImportService _excelImportService;
+  final SupabaseSyncService? _syncService;
+  final Logger _logger = Logger('OrderNotifier');
 
-  OrderNotifier(this._repository, this._excelImportService)
+  OrderNotifier(this._repository, this._excelImportService, this._syncService)
       : super(const OrderState()) {
     loadOrders();
   }
 
-  Future<void> loadOrders(
-      {String? searchQuery, OrderStatus? filterStatus}) async {
+  /// Hybrid approach: Local data ile hemen yükle, ardından Supabase'den sync yap
+  Future<void> loadOrders({
+    String? searchQuery,
+    OrderStatus? filterStatus,
+    bool forceSync = false,
+  }) async {
     try {
       state = state.copyWith(
           isLoading: true, clearError: true, clearSuccessMessage: true);
-      final orders = await _repository.getOrders(
+
+      // 1. Önce local verilerden yükle (hızlı)
+      final localOrders = await _repository.getOrders(
           searchQuery: searchQuery, filterStatus: filterStatus);
-      state = state.copyWith(orders: orders, isLoading: false);
+
+      state = state.copyWith(orders: localOrders, isLoading: false);
+
+      // 2. Eğer Supabase service varsa, background'da sync yap
+      if (_syncService != null && (forceSync || SupabaseService.isOnline)) {
+        await _syncFromSupabase(
+            searchQuery: searchQuery, filterStatus: filterStatus);
+      }
     } catch (e) {
+      _logger.severe('💥 Orders yüklenirken hata', e);
       state = state.copyWith(
         isLoading: false,
         error: 'Siparişler yüklenirken hata oluştu: $e',
@@ -67,11 +99,80 @@ class OrderNotifier extends StateNotifier<OrderState> {
     }
   }
 
+  /// Supabase'den veri çekip sync yapan method
+  Future<void> _syncFromSupabase({
+    String? searchQuery,
+    OrderStatus? filterStatus,
+  }) async {
+    if (_syncService == null) return;
+
+    try {
+      state = state.copyWith(isSyncing: true);
+      _logger.info('🔄 Supabase sync başlatıldı');
+
+      // Supabase'den veri çek
+      final supabaseOrders = await _syncService.fetchOrdersFromSupabase(
+        searchQuery: searchQuery,
+        status: filterStatus?.name,
+        limit: 100,
+      );
+
+      state = state.copyWith(
+        supabaseOrders: supabaseOrders,
+        lastSyncTime: DateTime.now(),
+      );
+
+      // Local verileri tekrar yükle (sync sonrasında güncellenmiş olabilir)
+      final localOrders = await _repository.getOrders(
+          searchQuery: searchQuery, filterStatus: filterStatus);
+
+      state = state.copyWith(
+        orders: localOrders,
+        isSyncing: false,
+      );
+
+      _logger
+          .info('✅ Supabase sync tamamlandı: ${supabaseOrders.length} sipariş');
+    } catch (e) {
+      _logger.warning(
+          '⚠️ Supabase sync hatası (local veriler kullanılıyor)', e);
+      state = state.copyWith(
+        isSyncing: false,
+        error: 'Sync hatası: $e (local veriler kullanılıyor)',
+      );
+    }
+  }
+
+  /// Manuel sync tetikleme
+  Future<void> syncWithSupabase() async {
+    await loadOrders(forceSync: true);
+  }
+
   Future<void> createOrder(OrdersCompanion orderCompanion) async {
     try {
       state = state.copyWith(
           isLoading: true, clearError: true, clearSuccessMessage: true);
+
       await _repository.createOrder(orderCompanion);
+
+      // Supabase'e de gönder (background)
+      if (_syncService != null && SupabaseService.isOnline) {
+        try {
+          // Local'dan yeni oluşturulan siparişi al ve Supabase'e push et
+          final createdOrder =
+              await _repository.getOrderByCode(orderCompanion.orderCode.value);
+          if (createdOrder != null) {
+            await _syncService.pushOrderToSupabase(createdOrder);
+            _logger.info(
+                '✅ Sipariş Supabase\'e gönderildi: ${createdOrder.orderCode}');
+          }
+        } catch (e) {
+          _logger.warning(
+              '⚠️ Sipariş Supabase\'e gönderilemedi (offline\'da sync olacak)',
+              e);
+        }
+      }
+
       await loadOrders();
       state = state.copyWith(
           isLoading: false, successMessage: "Sipariş başarıyla oluşturuldu.");
@@ -153,8 +254,34 @@ class OrderNotifier extends StateNotifier<OrderState> {
     try {
       state = state.copyWith(
           isLoading: true, clearError: true, clearSuccessMessage: true);
+
       await _repository.updateOrderItemScannedQuantity(
           orderItemId, newQuantity);
+
+      // Supabase'e barkod okuma kaydını gönder (background)
+      if (_syncService != null &&
+          SupabaseService.isOnline &&
+          activeOrderCode != null) {
+        try {
+          // Order item'dan product ID'yi ve barkod'u al
+          final orderItem = await _repository.getOrderItemById(orderItemId);
+          if (orderItem != null) {
+            final product =
+                await _repository.getProductById(orderItem.productId);
+            if (product != null) {
+              await _syncService.pushBarcodeReadToSupabase(
+                orderCode: activeOrderCode,
+                barcode: product.barcode,
+                productId: product.id,
+                scannedQuantity: newQuantity,
+              );
+              _logger.info('✅ Barkod okuma Supabase\'e gönderildi');
+            }
+          }
+        } catch (e) {
+          _logger.warning('⚠️ Barkod okuma Supabase\'e gönderilemedi', e);
+        }
+      }
 
       await loadOrders();
       if (activeOrderCode != null &&
@@ -224,5 +351,6 @@ final orderNotifierProvider =
     StateNotifierProvider<OrderNotifier, OrderState>((ref) {
   final repository = ref.watch(orderRepositoryProvider);
   final excelService = ref.watch(excelImportServiceProvider);
-  return OrderNotifier(repository, excelService);
+  final syncService = ref.watch(supabaseSyncServiceProvider);
+  return OrderNotifier(repository, excelService, syncService);
 });

@@ -2,7 +2,15 @@
 
 ## Genel Bakış
 
-Sipariş Yönetimi modülü, üretim fabrikasında sipariş süreçlerini yönetmek ve takip etmek için geliştirilmiş ana modüllerden biridir. Bu modül MVVM (Model-View-ViewModel) mimarisini kullanarak Riverpod ile state management sağlar.
+Sipariş Yönetimi modülü, üretim fabrikasında sipariş süreçlerini yönetmek ve takip etmek için geliştirilmiş ana modüllerden biridir. Bu modül MVVM (Model-View-ViewModel) mimarisini kullanarak Riverpod ile state management sağlar ve **Supabase** ile **offline-first hybrid sync** sistemi içerir.
+
+### Yeni Özellikler (v2.0)
+- ✅ **Supabase Entegrasyonu**: Firebase yerine Supabase backend kullanımı
+- ✅ **Offline-First Yaklaşım**: İnternet olmadan da tam işlevsellik
+- ✅ **Hybrid Sync Sistemi**: Online/offline durumlar arası otomatik senkronizasyon
+- ✅ **Conflict Resolution**: Veri çakışmalarının akıllı çözümü
+- ✅ **Realtime Updates**: Gerçek zamanlı veri güncellemeleri
+- ✅ **Comprehensive Logging**: Detaylı işlem logları
 
 ## Modül Yapısı
 
@@ -96,50 +104,48 @@ Abstract class olarak tanımlanmış, temel CRUD işlemlerini ve stream operasyo
 ```dart
 class OrderRepositoryImpl implements OrderRepository {
   final AppDatabase _db;
+  late final SupabaseSyncService? _syncService;
+  static final Logger _logger = Logger('OrderRepositoryImpl');
   
-  // Temel işlemler
+  // OFFLINE-FIRST TEMEL İŞLEMLER
   Future<List<Order>> getOrders({String? searchQuery, OrderStatus? filterStatus})
   Future<Order?> getOrderById(String orderCode)
   Future<int> createOrder(OrdersCompanion order)
   Future<bool> updateOrder(Order order)
   Future<bool> deleteOrder(String orderCode)
   
-  // Sipariş kalemi işlemleri
+  // HYBRID SYNC DESTEKLI İŞLEMLER
   Future<List<OrderItem>> getOrderItems(String orderCode)
   Future<int> createOrderItem(OrderItemsCompanion orderItem)
   Future<bool> updateOrderItemScannedQuantity(String orderItemId, int newQuantity)
   
-  // Arama ve filtreleme
+  // SUPABASE SYNC METOTLARI
+  Future<void> _syncOrdersInBackground(String? searchQuery, OrderStatus? filterStatus)
+  Future<void> _syncSingleOrder(Map<String, dynamic> remoteOrderData)
+  Future<void> _pushBarcodeReadToSupabase(String orderItemId, int newQuantity)
+  
+  // CONFLICT RESOLUTION
+  Future<void> _insertOrderFromRemote(Map<String, dynamic> remoteOrderData)
+  Future<void> _updateOrderFromRemote(Order localOrder, Map<String, dynamic> remoteOrderData)
+  OrderStatus _parseOrderStatus(String statusString)
+  
+  // MEVCUT METOTLAR
   Future<List<Order>> searchOrders({...})
   Future<Map<String, dynamic>> getOrderSummary(String orderCode)
-  
-  // Stream işlemleri
   Stream<List<Order>> watchAllOrders()
   Stream<Order> watchOrderById(int id)
   Stream<List<OrderItem>> watchOrderItems(int orderId)
-  
-  // Diğer Metotlar
-  Future<List<BarcodeRead>> getBarcodeHistory(String orderCode, {int? limit});
-  Future<Product?> getProductById(int productId);
-  Future<ProductCodeMapping?> getProductCodeMapping(
-      int productId, String customerName);
-  Future<List<Map<String, dynamic>>> getBoxContents(String orderCode);
-
-
-  // Excel entegrasyonu
-  Future<void> createOrderWithItems({
-    required model_order.Order orderData,
-    required List<model_order_item.OrderItem> itemsData,
-    required List<String> customerProductCodes,
-  })
+  Future<void> createOrderWithItems({...})
 }
 ```
 
-**Özellikler:**
-- Drift ORM kullanarak veritabanı işlemleri
-- Transaction desteği
-- Stream tabanlı reactive programming
-- Excel importu için özel metot
+**Yeni Özellikler:**
+- 🔄 **Offline-First Approach**: Tüm işlemler önce local'de yapılır
+- 📡 **Background Sync**: Online olduğunda arka planda Supabase ile sync
+- ⚡ **Real-time Conflict Resolution**: Timestamp bazlı çakışma çözümü
+- 📝 **Comprehensive Logging**: Tüm işlemler detaylı şekilde loglanır
+- 🔗 **Automatic Barcode Sync**: Barkod okumaları otomatik olarak Supabase'e gönderilir
+- 🛡️ **Error Resilience**: Hata durumlarında graceful degradation
 
 ## State Management
 
