@@ -207,6 +207,15 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     final order = state.order!;
     final itemDetails = state.orderItemDetails ?? [];
 
+    // Debug logları
+    print('🎯 OrderDetailScreen: State loaded - Order: ${order.orderCode}');
+    print('🎯 OrderDetailScreen: ItemDetails count: ${itemDetails.length}');
+    for (var i = 0; i < itemDetails.length; i++) {
+      final detail = itemDetails[i];
+      print(
+          '🎯 OrderDetailScreen: Detail $i - ProductId: ${detail.orderItem.productId}, Product: ${detail.product?.name ?? 'null'}');
+    }
+
     return Column(
       children: [
         // Bildirim alanı - üstte sabit

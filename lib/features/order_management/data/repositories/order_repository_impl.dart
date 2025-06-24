@@ -182,13 +182,35 @@ class OrderRepositoryImpl implements OrderRepository {
 
   @override
   Future<List<OrderItem>> getOrderItems(String orderCode) async {
+    _logger.info('📦 Sipariş kalemleri çekiliyor - OrderCode: $orderCode');
+
+    // Önce Supabase'den sync yap (eğer online ise)
+    if (SupabaseService.isOnline && _syncService != null) {
+      try {
+        _logger.info('🔄 Supabase\'den order items sync ediliyor');
+        await _syncOrderItemsFromSupabase(orderCode);
+
+        _logger.info('🔄 Supabase\'den products sync ediliyor');
+        await _syncService.syncProductsWithLocal();
+      } catch (e, stackTrace) {
+        _logger.warning(
+            '⚠️ Supabase sync hatası, local devam ediyor', e, stackTrace);
+      }
+    }
+
     final order = await getOrderById(orderCode);
     if (order == null) {
+      _logger.warning('⚠️ Sipariş bulunamadı - OrderCode: $orderCode');
       return [];
     }
-    return await (_db.select(_db.orderItems)
+
+    final items = await (_db.select(_db.orderItems)
           ..where((oi) => oi.orderId.equals(order.id)))
         .get();
+
+    _logger.info(
+        '✅ ${items.length} sipariş kalemi bulundu - OrderCode: $orderCode');
+    return items;
   }
 
   @override
@@ -249,6 +271,120 @@ class OrderRepositoryImpl implements OrderRepository {
     } catch (e, stackTrace) {
       _logger.severe('💥 Sipariş kalemi güncelleme hatası', e, stackTrace);
       return false;
+    }
+  }
+
+  /// Supabase'den order items'ları sync eder
+  Future<void> _syncOrderItemsFromSupabase(String orderCode) async {
+    try {
+      if (_syncService == null) {
+        _logger.warning('⚠️ Sync service mevcut değil');
+        return;
+      }
+
+      _logger.info(
+          '📥 Supabase\'den order items çekiliyor - OrderCode: $orderCode');
+
+      // Önce order'ı Supabase'den çek (order items'lar dahil)
+      final ordersData = await _syncService.fetchOrdersFromSupabase(
+        searchQuery: orderCode,
+        limit: 1,
+      );
+
+      if (ordersData.isEmpty) {
+        _logger.warning(
+            '⚠️ Supabase\'de sipariş bulunamadı - OrderCode: $orderCode');
+        return;
+      }
+
+      final orderData = ordersData.first;
+      final orderItemsData = orderData['order_items'] as List<dynamic>? ?? [];
+
+      if (orderItemsData.isEmpty) {
+        _logger.info('ℹ️ Supabase\'de order items yok - OrderCode: $orderCode');
+        return;
+      }
+
+      // Local order'ı bul
+      final localOrder = await getOrderById(orderCode);
+      if (localOrder == null) {
+        _logger
+            .warning('⚠️ Local\'de sipariş bulunamadı - OrderCode: $orderCode');
+        return;
+      }
+
+      _logger.info('🔄 ${orderItemsData.length} order item sync ediliyor');
+
+      // Her order item'ı sync et
+      for (final itemData in orderItemsData) {
+        await _syncSingleOrderItem(localOrder.id, itemData);
+      }
+
+      _logger.info('✅ Order items sync tamamlandı - OrderCode: $orderCode');
+    } catch (e, stackTrace) {
+      _logger.severe('💥 Order items sync hatası', e, stackTrace);
+      rethrow;
+    }
+  }
+
+  /// Tek bir order item'ı sync eder
+  Future<void> _syncSingleOrderItem(
+      int localOrderId, Map<String, dynamic> itemData) async {
+    try {
+      final productId = itemData['product_id'] as int;
+      final quantity = itemData['quantity'] as int;
+      final scannedQuantity = itemData['scanned_quantity'] as int? ?? 0;
+
+      // Local'de bu order item var mı kontrol et
+      final existingItems = await (_db.select(_db.orderItems)
+            ..where((oi) => oi.orderId.equals(localOrderId))
+            ..where((oi) => oi.productId.equals(productId)))
+          .get();
+
+      if (existingItems.isEmpty) {
+        // Local'de yok, ekle
+        _logger.info('📥 Yeni order item ekleniyor - ProductId: $productId');
+        await _db.into(_db.orderItems).insert(OrderItemsCompanion(
+              orderId: Value(localOrderId),
+              productId: Value(productId),
+              quantity: Value(quantity),
+              scannedQuantity: Value(scannedQuantity),
+            ));
+      } else {
+        // Local'de var, conflict resolution yap
+        final existingItem = existingItems.first;
+        final localScannedQuantity = existingItem.scannedQuantity;
+        final remoteScannedQuantity = scannedQuantity;
+
+        // Local'deki scannedQuantity daha büyükse onu koru (conflict resolution)
+        final finalScannedQuantity =
+            localScannedQuantity > remoteScannedQuantity
+                ? localScannedQuantity
+                : remoteScannedQuantity;
+
+        _logger.info(
+            '🔄 Order item güncelleniyor - ProductId: $productId, Local: $localScannedQuantity, Remote: $remoteScannedQuantity, Final: $finalScannedQuantity');
+
+        await (_db.update(_db.orderItems)
+              ..where((oi) => oi.id.equals(existingItem.id)))
+            .write(OrderItemsCompanion(
+          quantity: Value(quantity),
+          scannedQuantity: Value(finalScannedQuantity),
+        ));
+
+        // Eğer local değer daha büyükse, Supabase'e push et (arka planda)
+        if (localScannedQuantity > remoteScannedQuantity &&
+            _syncService != null &&
+            SupabaseService.isOnline) {
+          _logger.info(
+              '📤 Local değer daha güncel, Supabase\'e push ediliyor - ProductId: $productId, Quantity: $localScannedQuantity');
+          // Bu durumda barkod okuma push işlemini tetikle
+          _pushBarcodeReadToSupabase(
+              existingItem.id.toString(), localScannedQuantity);
+        }
+      }
+    } catch (e, stackTrace) {
+      _logger.severe('💥 Tek order item sync hatası', e, stackTrace);
     }
   }
 
@@ -449,9 +585,37 @@ class OrderRepositoryImpl implements OrderRepository {
 
   @override
   Future<Product?> getProductById(int productId) async {
-    return await (_db.select(_db.products)
+    _logger.info('🏷️ Ürün bilgisi çekiliyor - ProductId: $productId');
+
+    // Önce local'den kontrol et
+    var product = await (_db.select(_db.products)
           ..where((p) => p.id.equals(productId)))
         .getSingleOrNull();
+
+    // Eğer local'de bulunamazsa ve online ise Supabase'den sync yap
+    if (product == null && SupabaseService.isOnline && _syncService != null) {
+      try {
+        _logger.info(
+            '🔄 Ürün bulunamadı, Supabase\'den sync ediliyor - ProductId: $productId');
+        await _syncService.syncProductsWithLocal();
+
+        // Sync'den sonra tekrar kontrol et
+        product = await (_db.select(_db.products)
+              ..where((p) => p.id.equals(productId)))
+            .getSingleOrNull();
+      } catch (e, stackTrace) {
+        _logger.warning('⚠️ Product sync hatası', e, stackTrace);
+      }
+    }
+
+    if (product != null) {
+      _logger.info(
+          '✅ Ürün bulundu - ProductId: $productId, Name: ${product.name}');
+    } else {
+      _logger.warning('⚠️ Ürün bulunamadı - ProductId: $productId');
+    }
+
+    return product;
   }
 
   @override

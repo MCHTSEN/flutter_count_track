@@ -271,22 +271,44 @@ class SupabaseSyncService {
   Future<void> _syncSingleProduct(
       Map<String, dynamic> remoteProductData) async {
     try {
+      final remoteId = remoteProductData['id'] as int;
       final ourProductCode = remoteProductData['our_product_code'] as String;
 
-      // Local'de var mı kontrol et
-      final existingProducts = await (_localDb.select(_localDb.products)
-            ..where((p) => p.ourProductCode.equals(ourProductCode)))
-          .get();
+      // Önce ID ile kontrol et
+      final existingProductById = await (_localDb.select(_localDb.products)
+            ..where((p) => p.id.equals(remoteId)))
+          .getSingleOrNull();
 
-      if (existingProducts.isEmpty) {
-        // Local'de yok, ekle
-        _logger.info('📥 Yeni ürün local\'e ekleniyor: $ourProductCode');
-        await _insertProductFromRemote(remoteProductData);
+      if (existingProductById != null) {
+        // ID ile eşleşen var, güncelle
+        _logger
+            .info('🔄 Ürün ID ile güncelleniyor: $remoteId - $ourProductCode');
+        await _updateProductFromRemote(existingProductById, remoteProductData);
+        return;
+      }
+
+      // ID ile eşleşen yok, product code ile kontrol et
+      final existingProductByCode = await (_localDb.select(_localDb.products)
+            ..where((p) => p.ourProductCode.equals(ourProductCode)))
+          .getSingleOrNull();
+
+      if (existingProductByCode != null) {
+        // Product code ile eşleşen var ama ID farklı - bu durumda ID'yi güncelle
+        _logger.info(
+            '🔄 Ürün ID değiştiriliyor: ${existingProductByCode.id} -> $remoteId - $ourProductCode');
+
+        // Önce eski kaydı sil
+        await (_localDb.delete(_localDb.products)
+              ..where((p) => p.id.equals(existingProductByCode.id)))
+            .go();
+
+        // Yeni ID ile ekle
+        await _insertProductFromRemoteWithId(remoteProductData);
       } else {
-        // Local'de var, güncelle (Product tablosunda updatedAt yok, her zaman güncelle)
-        final localProduct = existingProducts.first;
-        _logger.info('🔄 Ürün güncelleniyor: $ourProductCode');
-        await _updateProductFromRemote(localProduct, remoteProductData);
+        // Hiç yok, yeni ekle
+        _logger.info(
+            '📥 Yeni ürün local\'e ekleniyor: $remoteId - $ourProductCode');
+        await _insertProductFromRemoteWithId(remoteProductData);
       }
     } catch (e, stackTrace) {
       _logger.severe('💥 Tek ürün sync hatası', e, stackTrace);
@@ -297,6 +319,21 @@ class SupabaseSyncService {
   Future<void> _insertProductFromRemote(
       Map<String, dynamic> remoteProductData) async {
     final productCompanion = ProductsCompanion(
+      ourProductCode: Value(remoteProductData['our_product_code']),
+      name: Value(remoteProductData['name']),
+      barcode: Value(remoteProductData['barcode']),
+      isUniqueBarcodeRequired:
+          Value(remoteProductData['is_unique_barcode_required'] ?? false),
+    );
+
+    await _localDb.into(_localDb.products).insert(productCompanion);
+  }
+
+  /// Remote'dan gelen ürünü ID'si ile birlikte local'e ekler
+  Future<void> _insertProductFromRemoteWithId(
+      Map<String, dynamic> remoteProductData) async {
+    final productCompanion = ProductsCompanion(
+      id: Value(remoteProductData['id'] as int),
       ourProductCode: Value(remoteProductData['our_product_code']),
       name: Value(remoteProductData['name']),
       barcode: Value(remoteProductData['barcode']),

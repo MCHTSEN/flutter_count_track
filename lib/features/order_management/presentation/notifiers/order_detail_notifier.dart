@@ -74,8 +74,16 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
       print('📋 OrderDetail: Order found: ${order?.orderCode ?? 'null'}');
 
       if (order != null) {
+        print('🔄 OrderDetail: Fetching order items...');
         final items = await _orderRepository.getOrderItems(_orderCode);
         print('📦 OrderDetail: Found ${items.length} order items');
+
+        // Order items'ları debug için detaylı yazdır
+        for (var i = 0; i < items.length; i++) {
+          final item = items[i];
+          print(
+              '📋 OrderDetail: Item $i - OrderId: ${item.orderId}, ProductId: ${item.productId}, Quantity: ${item.quantity}, Scanned: ${item.scannedQuantity}');
+        }
 
         // Ürün detaylarını ve barkod bilgilerini getir
         final List<OrderItemDetail> itemDetails = [];
@@ -112,19 +120,23 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
             await _orderRepository.getBarcodeHistory(_orderCode);
         print('📖 OrderDetail: Found ${barcodeHistory.length} barcode reads');
 
+        print(
+            '🎯 OrderDetail: Setting state with ${itemDetails.length} itemDetails');
         state = state.copyWith(
             isLoading: false,
             order: order,
             orderItemDetails: itemDetails,
             barcodeHistory: barcodeHistory);
+        print('✅ OrderDetail: State updated successfully');
       } else {
         print('❌ OrderDetail: Order not found');
         state = state.copyWith(
             isLoading: false,
             errorMessage: "Sipariş bulunamadı."); // Order not found.
       }
-    } catch (e) {
+    } catch (e, stackTrace) {
       print('💥 OrderDetail: Error fetching details: $e');
+      print('💥 OrderDetail: Stack trace: $stackTrace');
       state = state.copyWith(
           isLoading: false,
           errorMessage:
@@ -133,7 +145,11 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
   }
 
   Future<void> refreshOrderDetails() async {
+    print(
+        '🔄 OrderDetail: refreshOrderDetails çağırıldı - OrderCode: $_orderCode');
     await _fetchOrderDetails();
+    print(
+        '✅ OrderDetail: refreshOrderDetails tamamlandı - ItemDetails: ${state.orderItemDetails?.length ?? 0}');
   }
 
   // TODO: Add other methods if needed, e.g., to update item scanned quantity which would then refresh
