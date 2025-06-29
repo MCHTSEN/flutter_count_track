@@ -184,20 +184,6 @@ class OrderRepositoryImpl implements OrderRepository {
   Future<List<OrderItem>> getOrderItems(String orderCode) async {
     _logger.info('📦 Sipariş kalemleri çekiliyor - OrderCode: $orderCode');
 
-    // Önce Supabase'den sync yap (eğer online ise)
-    if (SupabaseService.isOnline && _syncService != null) {
-      try {
-        _logger.info('🔄 Supabase\'den order items sync ediliyor');
-        await _syncOrderItemsFromSupabase(orderCode);
-
-        _logger.info('🔄 Supabase\'den products sync ediliyor');
-        await _syncService.syncProductsWithLocal();
-      } catch (e, stackTrace) {
-        _logger.warning(
-            '⚠️ Supabase sync hatası, local devam ediyor', e, stackTrace);
-      }
-    }
-
     final order = await getOrderById(orderCode);
     if (order == null) {
       _logger.warning('⚠️ Sipariş bulunamadı - OrderCode: $orderCode');
@@ -211,6 +197,28 @@ class OrderRepositoryImpl implements OrderRepository {
     _logger.info(
         '✅ ${items.length} sipariş kalemi bulundu - OrderCode: $orderCode');
     return items;
+  }
+
+  /// Manuel sync için ayrı metod
+  Future<List<OrderItem>> getOrderItemsWithSync(String orderCode) async {
+    _logger.info(
+        '📦 Sipariş kalemleri sync ile çekiliyor - OrderCode: $orderCode');
+
+    // Supabase'den sync yap (eğer online ise)
+    if (SupabaseService.isOnline && _syncService != null) {
+      try {
+        _logger.info('🔄 Supabase\'den order items sync ediliyor');
+        await _syncOrderItemsFromSupabase(orderCode);
+
+        _logger.info('🔄 Supabase\'den products sync ediliyor');
+        await _syncService.syncProductsWithLocal();
+      } catch (e, stackTrace) {
+        _logger.warning(
+            '⚠️ Supabase sync hatası, local devam ediyor', e, stackTrace);
+      }
+    }
+
+    return await getOrderItems(orderCode);
   }
 
   @override

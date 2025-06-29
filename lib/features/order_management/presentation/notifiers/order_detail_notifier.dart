@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_count_track/core/database/app_database.dart'; // For Order, OrderItem, OrderStatus
 import 'package:flutter_count_track/features/order_management/domain/repositories/order_repository.dart';
 // Assuming a provider for OrderRepository is defined elsewhere, e.g., order_providers.dart
@@ -58,10 +60,18 @@ class OrderDetailState {
 class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
   final OrderRepository _orderRepository;
   final String _orderCode; // Changed from orderId to orderCode for clarity
+  Timer? _syncTimer;
 
   OrderDetailNotifier(this._orderCode, this._orderRepository)
       : super(const OrderDetailState(isLoading: true)) {
     _fetchOrderDetails();
+    _startPeriodicSync();
+  }
+
+  @override
+  void dispose() {
+    _syncTimer?.cancel();
+    super.dispose();
   }
 
   Future<void> _fetchOrderDetails() async {
@@ -150,6 +160,77 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
     await _fetchOrderDetails();
     print(
         '✅ OrderDetail: refreshOrderDetails tamamlandı - ItemDetails: ${state.orderItemDetails?.length ?? 0}');
+  }
+
+  /// Manuel sync ile refresh (Yenile butonu için)
+  Future<void> refreshOrderDetailsWithSync() async {
+    print(
+        '🔄 OrderDetail: Manuel sync ile refresh başlatıldı - OrderCode: $_orderCode');
+    await _fetchOrderDetailsWithSync();
+    print(
+        '✅ OrderDetail: Manuel sync ile refresh tamamlandı - ItemDetails: ${state.orderItemDetails?.length ?? 0}');
+  }
+
+  /// 5 dakikalık periyodik sync başlatır
+  void _startPeriodicSync() {
+    _syncTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
+      print(
+          '⏰ OrderDetail: 5 dakikalık periyodik sync başlatıldı - OrderCode: $_orderCode');
+      _fetchOrderDetailsWithSync();
+    });
+    print(
+        '⏰ OrderDetail: Periyodik sync başlatıldı (5 dakika) - OrderCode: $_orderCode');
+  }
+
+  /// Sync ile order details fetch eder
+  Future<void> _fetchOrderDetailsWithSync() async {
+    try {
+      print(
+          '🔄 OrderDetail: Sync ile fetching başlatıldı - OrderCode: $_orderCode');
+
+      final order = await _orderRepository.getOrderById(_orderCode);
+      if (order == null) {
+        print('❌ OrderDetail: Order not found');
+        state = state.copyWith(
+            isLoading: false, errorMessage: "Sipariş bulunamadı.");
+        return;
+      }
+
+      // Sync ile order items çek
+      final items = await _orderRepository.getOrderItemsWithSync(_orderCode);
+      print('📦 OrderDetail: Sync ile ${items.length} order items bulundu');
+
+      // Ürün detaylarını ve barkod bilgilerini getir
+      final List<OrderItemDetail> itemDetails = [];
+
+      for (final item in items) {
+        final product = await _orderRepository.getProductById(item.productId);
+        final mapping = await _orderRepository.getProductCodeMapping(
+            item.productId, order.customerName);
+
+        itemDetails.add(OrderItemDetail(
+          orderItem: item,
+          product: product,
+          productCodeMapping: mapping,
+        ));
+      }
+
+      // Barkod geçmişini getir
+      final barcodeHistory =
+          await _orderRepository.getBarcodeHistory(_orderCode);
+
+      state = state.copyWith(
+          isLoading: false,
+          order: order,
+          orderItemDetails: itemDetails,
+          barcodeHistory: barcodeHistory);
+
+      print(
+          '✅ OrderDetail: Sync ile fetch tamamlandı - ${itemDetails.length} items');
+    } catch (e, stackTrace) {
+      print('💥 OrderDetail: Sync ile fetch hatası: $e');
+      print('💥 OrderDetail: Stack trace: $stackTrace');
+    }
   }
 
   // TODO: Add other methods if needed, e.g., to update item scanned quantity which would then refresh

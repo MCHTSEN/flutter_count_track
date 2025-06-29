@@ -22,6 +22,8 @@ abstract class OrderRepository {
   // Order Item Operations
   Future<List<OrderItem>> getOrderItems(
       String orderId); // Use String for ID consistency
+  Future<List<OrderItem>> getOrderItemsWithSync(
+      String orderId); // Sync ile sipariş kalemleri getir
   Future<OrderItem?> getOrderItemById(
       String orderItemId); // Sipariş kalemi getir
   Future<int> createOrderItem(

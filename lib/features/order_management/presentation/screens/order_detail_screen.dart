@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_count_track/core/database/app_database.dart'; // For Order, OrderItem
 import 'package:flutter_count_track/features/barcode_scanning/presentation/notifiers/barcode_notifier.dart';
 import 'package:flutter_count_track/features/barcode_scanning/presentation/widgets/barcode_notification_widget.dart';
@@ -23,79 +24,191 @@ class OrderDetailScreen extends ConsumerStatefulWidget {
 class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   int _selectedBoxNumber = 1; // Varsayılan olarak Koli 1
 
+  // Barkod okuyucu için keyboard listener state
+  String _barcodeBuffer = '';
+  DateTime? _lastKeyPress;
+  final FocusNode _keyboardFocusNode = FocusNode();
+
+  // Barkod okuyucu ayarları
+  static const Duration _barcodeTimeout =
+      Duration(milliseconds: 100); // Karakterler arası max süre
+  static const int _minBarcodeLength = 3; // Minimum barkod uzunluğu
+  static const int _maxBarcodeLength = 50; // Maximum barkod uzunluğu
+
+  @override
+  void initState() {
+    super.initState();
+    // Klavye odağını hemen al
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _keyboardFocusNode.requestFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    _keyboardFocusNode.dispose();
+    super.dispose();
+  }
+
+  /// Keyboard event'lerini işler - gerçek barkod okuyucu için
+  void _handleKeyEvent(RawKeyEvent event) {
+    if (event is RawKeyDownEvent) {
+      final now = DateTime.now();
+
+      // Enter tuşu - barkodu işle
+      if (event.logicalKey == LogicalKeyboardKey.enter) {
+        _processBarcodeFromBuffer();
+        return;
+      }
+
+      // Escape tuşu - buffer'ı temizle
+      if (event.logicalKey == LogicalKeyboardKey.escape) {
+        _clearBarcodeBuffer();
+        return;
+      }
+
+      // Karakter tuşları
+      final character = event.character;
+      if (character != null && character.isNotEmpty) {
+        setState(() {
+          // Timeout kontrolü - eğer son tuştan sonra çok geçtiyse, yeni barkod başlatılıyor
+          if (_lastKeyPress != null &&
+              now.difference(_lastKeyPress!) > _barcodeTimeout) {
+            _clearBarcodeBufferInternal();
+          }
+
+          // Karakteri buffer'a ekle
+          _barcodeBuffer += character;
+          _lastKeyPress = now;
+
+          // Buffer çok uzunsa temizle (hata durumu)
+          if (_barcodeBuffer.length > _maxBarcodeLength) {
+            _clearBarcodeBufferInternal();
+          }
+        });
+
+        // Debug: Buffer durumunu göster
+        debugPrint(
+            '🔍 Barkod Buffer: $_barcodeBuffer (${_barcodeBuffer.length} karakter)');
+      }
+    }
+  }
+
+  /// Buffer'dan barkodu işler
+  void _processBarcodeFromBuffer() {
+    if (_barcodeBuffer.length >= _minBarcodeLength) {
+      final barcode = _barcodeBuffer.trim();
+      debugPrint('✅ Barkod işleniyor: $barcode');
+
+      final state = ref.read(orderDetailNotifierProvider(widget.orderCode));
+      final order = state.order;
+
+      if (order != null) {
+        _processBarcodeInput(context, ref, order, barcode);
+      }
+    } else {
+      debugPrint(
+          '⚠️ Barkod çok kısa: $_barcodeBuffer (min: $_minBarcodeLength)');
+    }
+
+    _clearBarcodeBuffer();
+  }
+
+  /// Barkod buffer'ını temizler (UI güncellemeli)
+  void _clearBarcodeBuffer() {
+    setState(() {
+      _clearBarcodeBufferInternal();
+    });
+  }
+
+  /// Barkod buffer'ını temizler (internal - UI güncellemesiz)
+  void _clearBarcodeBufferInternal() {
+    _barcodeBuffer = '';
+    _lastKeyPress = null;
+    debugPrint('🧹 Barkod buffer temizlendi');
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(orderDetailNotifierProvider(widget.orderCode));
     final barcodeState = ref.watch(barcodeNotifierProvider);
 
-    return Scaffold(
-      backgroundColor: Colors.grey[100],
-      appBar: AppBar(
-        title: Text('Sipariş Detayı: ${widget.orderCode}',
-            style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.blue[800],
-        foregroundColor: Colors.white,
-        toolbarHeight: 80,
-        actions: [
-          Padding(
-            padding: const EdgeInsets.only(right: 8.0),
-            child: ElevatedButton.icon(
-              onPressed: () {
-                _generatePackingList(context, ref);
-              },
-              icon: const Icon(Icons.picture_as_pdf, size: 24),
-              label: const Text('Çeki Listesi', style: TextStyle(fontSize: 16)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.teal[600],
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+    return RawKeyboardListener(
+      focusNode: _keyboardFocusNode,
+      autofocus: true,
+      onKey: _handleKeyEvent,
+      child: Scaffold(
+        backgroundColor: Colors.grey[100],
+        appBar: AppBar(
+          title: Text('Sipariş Detayı: ${widget.orderCode}',
+              style:
+                  const TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
+          backgroundColor: Colors.blue[800],
+          foregroundColor: Colors.white,
+          toolbarHeight: 80,
+          actions: [
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  _generatePackingList(context, ref);
+                },
+                icon: const Icon(Icons.picture_as_pdf, size: 24),
+                label:
+                    const Text('Çeki Listesi', style: TextStyle(fontSize: 16)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.teal[600],
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 8.0),
-            child: ElevatedButton.icon(
-              onPressed: () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => BoxManagementScreen(
-                      orderCode: widget.orderCode,
+            Padding(
+              padding: const EdgeInsets.only(right: 8.0),
+              child: ElevatedButton.icon(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => BoxManagementScreen(
+                        orderCode: widget.orderCode,
+                      ),
                     ),
-                  ),
-                );
-              },
-              icon: const Icon(Icons.inventory_2, size: 24),
-              label:
-                  const Text('Koli Yönetimi', style: TextStyle(fontSize: 16)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.orange[600],
-                foregroundColor: Colors.white,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                  );
+                },
+                icon: const Icon(Icons.inventory_2, size: 24),
+                label:
+                    const Text('Koli Yönetimi', style: TextStyle(fontSize: 16)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.orange[600],
+                  foregroundColor: Colors.white,
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+                ),
               ),
             ),
-          ),
-          Padding(
-            padding: const EdgeInsets.only(right: 16.0),
-            child: ElevatedButton.icon(
-              onPressed: () => ref
-                  .read(orderDetailNotifierProvider(widget.orderCode).notifier)
-                  .refreshOrderDetails(),
-              icon: const Icon(Icons.refresh, size: 28),
-              label: const Text('Yenile', style: TextStyle(fontSize: 18)),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.white,
-                foregroundColor: Colors.blue[800],
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+            Padding(
+              padding: const EdgeInsets.only(right: 16.0),
+              child: ElevatedButton.icon(
+                onPressed: () => ref
+                    .read(
+                        orderDetailNotifierProvider(widget.orderCode).notifier)
+                    .refreshOrderDetailsWithSync(),
+                icon: const Icon(Icons.refresh, size: 28),
+                label: const Text('Yenile', style: TextStyle(fontSize: 18)),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.white,
+                  foregroundColor: Colors.blue[800],
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                ),
               ),
             ),
-          )
-        ],
+          ],
+        ),
+        body: _buildBody(context, ref, state, barcodeState),
       ),
-      body: _buildBody(context, ref, state, barcodeState),
     );
   }
 
@@ -372,9 +485,6 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
 
   Widget _buildBarcodeInputCard(
       BuildContext context, WidgetRef ref, Order order) {
-    final TextEditingController controller = TextEditingController();
-    final FocusNode focusNode = FocusNode();
-
     return Card(
       elevation: 4,
       color: Colors.green[50],
@@ -395,69 +505,165 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     color: Colors.green[700],
                   ),
                 ),
+                const Spacer(),
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[100],
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    'KEYBOARD LISTENER',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue[800],
+                      letterSpacing: 0.5,
+                    ),
+                  ),
+                ),
               ],
             ),
             const Divider(thickness: 2),
             const SizedBox(height: 16),
 
-            // Koli Seçimi Bölümü
-            // Koli seçimi kaldırıldı - artık ürün grid'inde var
-            const SizedBox(height: 16),
-
-            TextField(
-              controller: controller,
-              focusNode: focusNode,
-              style: const TextStyle(fontSize: 18),
-              decoration: InputDecoration(
-                hintText: 'Barkodu girin veya okutun',
-                hintStyle: TextStyle(color: Colors.grey[500]),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(width: 2),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: BorderSide(color: Colors.green[600]!, width: 2),
-                ),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                prefixIcon: Icon(Icons.qr_code, color: Colors.green[600]),
-              ),
-              onSubmitted: (barcode) {
-                if (barcode.isNotEmpty) {
-                  _processBarcodeInput(context, ref, order, barcode);
-                  controller.clear();
-                  focusNode.requestFocus();
-                }
-              },
-            ),
-            const SizedBox(height: 16),
-            SizedBox(
+            // Barkod durumu göstergesi
+            Container(
               width: double.infinity,
-              height: 60,
-              child: ElevatedButton.icon(
-                onPressed: () {
-                  String barcode = controller.text;
-                  if (barcode.isNotEmpty) {
-                    _processBarcodeInput(context, ref, order, barcode);
-                    controller.clear();
-                    focusNode.requestFocus();
-                  }
-                },
-                icon: const Icon(Icons.qr_code_scanner, size: 28),
-                label: const Text('BARKOD OKUT',
-                    style:
-                        TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.green[600],
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12)),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: _barcodeBuffer.isNotEmpty
+                    ? Colors.orange[50]
+                    : Colors.grey[50],
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: _barcodeBuffer.isNotEmpty
+                      ? Colors.orange[300]!
+                      : Colors.grey[300]!,
+                  width: 2,
                 ),
               ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(
+                        _barcodeBuffer.isNotEmpty
+                            ? Icons.keyboard
+                            : Icons.qr_code_scanner,
+                        color: _barcodeBuffer.isNotEmpty
+                            ? Colors.orange[600]
+                            : Colors.grey[600],
+                        size: 24,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _barcodeBuffer.isNotEmpty
+                            ? 'Barkod Okunuyor...'
+                            : 'Barkod okutmaya hazır',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                          color: _barcodeBuffer.isNotEmpty
+                              ? Colors.orange[700]
+                              : Colors.grey[700],
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (_barcodeBuffer.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange[200]!),
+                      ),
+                      child: Text(
+                        _barcodeBuffer,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontFamily: 'monospace',
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '${_barcodeBuffer.length} karakter - Enter tuşuna basın veya bekleyin',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.orange[600],
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ] else ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      'Barkod okuyucuyu kullanın veya klavyeyle yazın',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  flex: 2,
+                  child: ElevatedButton.icon(
+                    onPressed: _barcodeBuffer.isNotEmpty
+                        ? () {
+                            _processBarcodeFromBuffer();
+                          }
+                        : null,
+                    icon: const Icon(Icons.check, size: 24),
+                    label: const Text('İŞLE',
+                        style: TextStyle(
+                            fontSize: 16, fontWeight: FontWeight.bold)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.green[600],
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 1,
+                  child: ElevatedButton.icon(
+                    onPressed: _barcodeBuffer.isNotEmpty
+                        ? () {
+                            _clearBarcodeBuffer();
+                          }
+                        : null,
+                    icon: const Icon(Icons.clear, size: 20),
+                    label:
+                        const Text('Temizle', style: TextStyle(fontSize: 14)),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.red[100],
+                      foregroundColor: Colors.red[700],
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                  ),
+                ),
+              ],
             ),
             const SizedBox(height: 16),
-            _buildQuickBarcodeButtons(context, ref, order, controller),
+            _buildQuickBarcodeButtons(context, ref, order),
           ],
         ),
       ),
@@ -1364,8 +1570,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     );
   }
 
-  Widget _buildQuickBarcodeButtons(BuildContext context, WidgetRef ref,
-      Order order, TextEditingController controller) {
+  Widget _buildQuickBarcodeButtons(
+      BuildContext context, WidgetRef ref, Order order) {
     final state = ref.watch(orderDetailNotifierProvider(widget.orderCode));
     final itemDetails = state.orderItemDetails ?? [];
 
