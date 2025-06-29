@@ -22,7 +22,7 @@ class OrderDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
-    with TickerProviderStateMixin {
+    with TickerProviderStateMixin, WidgetsBindingObserver {
   int _selectedBoxNumber = 1; // Varsayılan olarak Koli 1
 
   // Barkod okuyucu için keyboard listener state
@@ -61,12 +61,17 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
       curve: Curves.elasticOut,
     ));
 
+    // App lifecycle observer'ı kaydet
+    WidgetsBinding.instance.addObserver(this);
+
     // Sistem haptic feedback'ini devre dışı bırak
     SystemChannels.textInput.invokeMethod('TextInput.hide');
 
     // Klavye odağını hemen al
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _keyboardFocusNode.requestFocus();
+      // Ekran ilk açıldığında da refresh et
+      _onScreenFocus();
     });
   }
 
@@ -74,7 +79,26 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
   void dispose() {
     _keyboardFocusNode.dispose();
     _quantityAnimationController.dispose();
+    WidgetsBinding.instance.removeObserver(this);
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    // Uygulama foreground'a geçtiğinde refresh et
+    if (state == AppLifecycleState.resumed) {
+      _onScreenFocus();
+    }
+  }
+
+  /// Ekran focus alındığında çağrılır
+  void _onScreenFocus() {
+    print('👁️ OrderDetailScreen: Focus alındı, verileri yenileniyor');
+    ref
+        .read(orderDetailNotifierProvider(widget.orderCode).notifier)
+        .onScreenFocus();
   }
 
   /// Keyboard event'lerini işler - gerçek barkod okuyucu için

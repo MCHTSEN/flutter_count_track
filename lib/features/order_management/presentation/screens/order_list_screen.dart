@@ -18,14 +18,48 @@ class OrderListScreen extends ConsumerStatefulWidget {
 }
 
 class _OrderListScreenState extends ConsumerState<OrderListScreen>
-    with OrderListScreenMixin {
+    with OrderListScreenMixin, WidgetsBindingObserver {
   String _searchQuery = '';
   OrderStatus? _selectedStatus;
 
   @override
+  void initState() {
+    super.initState();
+    // App lifecycle observer'ı kaydet
+    WidgetsBinding.instance.addObserver(this);
+
+    // Ekran ilk açıldığında refresh et
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _onScreenFocus();
+    });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    // Uygulama foreground'a geçtiğinde refresh et
+    if (state == AppLifecycleState.resumed) {
+      _onScreenFocus();
+    }
+  }
+
+  /// Ekran focus alındığında çağrılır
+  void _onScreenFocus() {
+    print('👁️ OrderListScreen: Focus alındı, verileri yenileniyor');
+    ref.read(orderNotifierProvider.notifier).onScreenFocus();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final orderState = ref.watch(orderNotifierProvider);
-    final connectivityStatus = ref.watch(connectivityStatusProvider);
+    final connectivityState = ref.watch(connectivityStatusProvider);
 
     return Scaffold(
       backgroundColor: Colors.grey[100],
@@ -35,8 +69,8 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen>
       ),
       body: Column(
         children: [
-          // Sync Status Bar
-          _buildSyncStatusBar(context, orderState, connectivityStatus),
+          // Real-time bağlantı durumu
+          _buildRealTimeStatusBar(orderState, connectivityState),
 
           // Üst filtreleme ve arama alanı
           OrderFilterSection(
@@ -131,46 +165,6 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen>
     );
   }
 
-  Widget _buildSyncStatusBar(
-    BuildContext context,
-    OrderState orderState,
-    AsyncValue<bool> connectivityStatus,
-  ) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      color: _getSyncStatusColor(orderState, connectivityStatus),
-      child: Row(
-        children: [
-          Icon(
-            _getSyncStatusIcon(orderState, connectivityStatus),
-            color: Colors.white,
-            size: 16,
-          ),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              _getSyncStatusText(orderState, connectivityStatus),
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 12,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          if (orderState.lastSyncTime != null)
-            Text(
-              'Son Sync: ${_formatTime(orderState.lastSyncTime!)}',
-              style: const TextStyle(
-                color: Colors.white70,
-                fontSize: 11,
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildSupabaseOrdersSummary(
       BuildContext context, OrderState orderState) {
     final supabaseCount = orderState.supabaseOrders.length;
@@ -219,50 +213,61 @@ class _OrderListScreenState extends ConsumerState<OrderListScreen>
     );
   }
 
-  Color _getSyncStatusColor(
-      OrderState orderState, AsyncValue<bool> connectivityStatus) {
-    if (orderState.isSyncing) return Colors.blue;
-    if (orderState.error != null) return Colors.red;
+  Widget _buildRealTimeStatusBar(
+      OrderState orderState, AsyncValue<bool> connectivityState) {
+    final isOnline = connectivityState.value ?? false;
+    final isRealTimeConnected = orderState.isRealTimeConnected;
 
-    return connectivityStatus.when(
-      data: (isOnline) => isOnline ? Colors.green : Colors.orange,
-      loading: () => Colors.grey,
-      error: (_, __) => Colors.red,
-    );
-  }
+    Color statusColor;
+    String statusText;
+    IconData statusIcon;
 
-  IconData _getSyncStatusIcon(
-      OrderState orderState, AsyncValue<bool> connectivityStatus) {
-    if (orderState.isSyncing) return Icons.sync;
-    if (orderState.error != null) return Icons.error;
-
-    return connectivityStatus.when(
-      data: (isOnline) => isOnline ? Icons.cloud_done : Icons.cloud_off,
-      loading: () => Icons.cloud_queue,
-      error: (_, __) => Icons.error,
-    );
-  }
-
-  String _getSyncStatusText(
-      OrderState orderState, AsyncValue<bool> connectivityStatus) {
-    if (orderState.isSyncing) {
-      return 'Supabase ile senkronizasyon yapılıyor...';
+    if (isRealTimeConnected && isOnline) {
+      statusColor = Colors.green;
+      statusText = 'Real-time Aktif • Otomatik Güncelleme Açık';
+      statusIcon = Icons.sync;
+    } else if (isOnline) {
+      statusColor = Colors.orange;
+      statusText = 'Çevrimiçi • 30 Saniyede Bir Kontrol';
+      statusIcon = Icons.sync_problem;
+    } else {
+      statusColor = Colors.red;
+      statusText = 'Çevrimdışı • Sadece Yerel Veriler';
+      statusIcon = Icons.sync_disabled;
     }
 
-    if (orderState.error != null) {
-      return 'Hata: ${orderState.error}';
-    }
-
-    return connectivityStatus.when(
-      data: (isOnline) => isOnline
-          ? 'Online - Supabase bağlantısı aktif'
-          : 'Offline - Sadece yerel veriler',
-      loading: () => 'Bağlantı durumu kontrol ediliyor...',
-      error: (_, __) => 'Bağlantı hatası',
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: statusColor.withOpacity(0.1),
+        border: Border(
+          bottom: BorderSide(color: statusColor.withOpacity(0.3)),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(statusIcon, size: 16, color: statusColor),
+          const SizedBox(width: 8),
+          Text(
+            statusText,
+            style: TextStyle(
+              fontSize: 12,
+              color: statusColor,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const Spacer(),
+          if (orderState.lastSyncTime != null)
+            Text(
+              'Son: ${orderState.lastSyncTime!.hour.toString().padLeft(2, '0')}:${orderState.lastSyncTime!.minute.toString().padLeft(2, '0')}',
+              style: TextStyle(
+                fontSize: 10,
+                color: Colors.grey[600],
+              ),
+            ),
+        ],
+      ),
     );
-  }
-
-  String _formatTime(DateTime time) {
-    return '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
   }
 }

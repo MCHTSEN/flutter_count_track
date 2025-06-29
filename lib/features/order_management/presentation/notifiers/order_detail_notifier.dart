@@ -1,10 +1,13 @@
 import 'dart:async';
 
 import 'package:flutter_count_track/core/database/app_database.dart'; // For Order, OrderItem, OrderStatus
+import 'package:flutter_count_track/core/database/database_provider.dart';
+import 'package:flutter_count_track/core/services/supabase_service.dart';
 import 'package:flutter_count_track/features/order_management/domain/repositories/order_repository.dart';
 // Assuming a provider for OrderRepository is defined elsewhere, e.g., order_providers.dart
 import 'package:flutter_count_track/features/order_management/presentation/notifiers/order_providers.dart'; // Placeholder for actual provider
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Ürün ve barkod bilgilerini içeren yardımcı sınıf
 class OrderItemDetail {
@@ -61,16 +64,21 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
   final OrderRepository _orderRepository;
   final String _orderCode; // Changed from orderId to orderCode for clarity
   Timer? _syncTimer;
+  RealtimeChannel? _realtimeChannel;
+  final SupabaseSyncService? _supabaseService;
 
-  OrderDetailNotifier(this._orderCode, this._orderRepository)
+  OrderDetailNotifier(
+      this._orderCode, this._orderRepository, this._supabaseService)
       : super(const OrderDetailState(isLoading: true)) {
     _fetchOrderDetails();
     _startPeriodicSync();
+    _startRealtimeSubscription();
   }
 
   @override
   void dispose() {
     _syncTimer?.cancel();
+    _stopRealtimeSubscription();
     super.dispose();
   }
 
@@ -171,15 +179,56 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
         '✅ OrderDetail: Manuel sync ile refresh tamamlandı - ItemDetails: ${state.orderItemDetails?.length ?? 0}');
   }
 
-  /// 5 dakikalık periyodik sync başlatır
+  /// 30 saniyelik periyodik sync başlatır (5 dakika yerine)
   void _startPeriodicSync() {
-    _syncTimer = Timer.periodic(const Duration(minutes: 5), (timer) {
+    _syncTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
       print(
-          '⏰ OrderDetail: 5 dakikalık periyodik sync başlatıldı - OrderCode: $_orderCode');
+          '⏰ OrderDetail: 30 saniyelik periyodik sync başlatıldı - OrderCode: $_orderCode');
       _fetchOrderDetailsWithSync();
     });
     print(
-        '⏰ OrderDetail: Periyodik sync başlatıldı (5 dakika) - OrderCode: $_orderCode');
+        '⏰ OrderDetail: Periyodik sync başlatıldı (30 saniye) - OrderCode: $_orderCode');
+  }
+
+  /// Real-time subscription başlatır
+  void _startRealtimeSubscription() {
+    if (_supabaseService == null) {
+      print(
+          '⚠️ OrderDetail: Supabase service mevcut değil, real-time sync devre dışı');
+      return;
+    }
+
+    try {
+      _realtimeChannel = _supabaseService.subscribeToOrderChanges((orderData) {
+        // Sadece bu siparişe ait değişiklikleri işle
+        if (orderData['order_code'] == _orderCode) {
+          print(
+              '🔴 OrderDetail: Real-time güncelleme alındı - OrderCode: $_orderCode');
+          _fetchOrderDetailsWithSync();
+        }
+      });
+      print(
+          '🔴 OrderDetail: Real-time subscription başlatıldı - OrderCode: $_orderCode');
+    } catch (e) {
+      print('⚠️ OrderDetail: Real-time subscription başlatılamadı: $e');
+    }
+  }
+
+  /// Real-time subscription'ı durdurur
+  void _stopRealtimeSubscription() {
+    if (_realtimeChannel != null && _supabaseService != null) {
+      _supabaseService.unsubscribeFromOrderChanges(_realtimeChannel!);
+      _realtimeChannel = null;
+      print(
+          '🔴 OrderDetail: Real-time subscription durduruldu - OrderCode: $_orderCode');
+    }
+  }
+
+  /// Ekran focus durumunda çağrılacak method
+  void onScreenFocus() {
+    print(
+        '👁️ OrderDetail: Ekran focus alındı, verileri yenileniyor - OrderCode: $_orderCode');
+    _fetchOrderDetailsWithSync();
   }
 
   /// Sync ile order details fetch eder
@@ -239,5 +288,11 @@ class OrderDetailNotifier extends StateNotifier<OrderDetailState> {
 final orderDetailNotifierProvider = StateNotifierProvider.autoDispose
     .family<OrderDetailNotifier, OrderDetailState, String>((ref, orderCode) {
   final orderRepository = ref.watch(orderRepositoryProvider);
-  return OrderDetailNotifier(orderCode, orderRepository);
+  SupabaseSyncService? supabaseService;
+  try {
+    supabaseService = ref.watch(supabaseSyncServiceProvider);
+  } catch (e) {
+    supabaseService = null;
+  }
+  return OrderDetailNotifier(orderCode, orderRepository, supabaseService);
 });

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter_count_track/core/database/app_database.dart';
 import 'package:flutter_count_track/core/database/database_provider.dart';
 import 'package:flutter_count_track/core/services/supabase_service.dart';
@@ -6,6 +8,7 @@ import 'package:flutter_count_track/features/order_management/domain/repositorie
 import 'package:flutter_count_track/features/order_management/presentation/notifiers/order_providers.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:logging/logging.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // State class for order management
 class OrderState {
@@ -18,6 +21,7 @@ class OrderState {
   final Map<String, dynamic>? selectedOrderSummary;
   final String? successMessage;
   final DateTime? lastSyncTime;
+  final bool isRealTimeConnected;
 
   const OrderState({
     this.orders = const [],
@@ -28,6 +32,7 @@ class OrderState {
     this.selectedOrderSummary,
     this.successMessage,
     this.lastSyncTime,
+    this.isRealTimeConnected = false,
   });
 
   OrderState copyWith({
@@ -42,6 +47,7 @@ class OrderState {
     bool clearError = false,
     bool clearSuccessMessage = false,
     DateTime? lastSyncTime,
+    bool? isRealTimeConnected,
   }) {
     return OrderState(
       orders: orders ?? this.orders,
@@ -54,6 +60,7 @@ class OrderState {
           : selectedOrderSummary ?? this.selectedOrderSummary,
       successMessage: clearSuccessMessage ? null : successMessage,
       lastSyncTime: lastSyncTime ?? this.lastSyncTime,
+      isRealTimeConnected: isRealTimeConnected ?? this.isRealTimeConnected,
     );
   }
 }
@@ -63,10 +70,70 @@ class OrderNotifier extends StateNotifier<OrderState> {
   final ExcelImportService _excelImportService;
   final SupabaseSyncService? _syncService;
   final Logger _logger = Logger('OrderNotifier');
+  Timer? _periodicTimer;
+  RealtimeChannel? _realtimeChannel;
 
   OrderNotifier(this._repository, this._excelImportService, this._syncService)
       : super(const OrderState()) {
     loadOrders();
+    _startPeriodicRefresh();
+    _startRealtimeSubscription();
+  }
+
+  @override
+  void dispose() {
+    _periodicTimer?.cancel();
+    _stopRealtimeSubscription();
+    super.dispose();
+  }
+
+  /// 30 saniyelik periyodik refresh başlatır
+  void _startPeriodicRefresh() {
+    _periodicTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      _logger.info('⏰ OrderNotifier: 30 saniyelik periyodik refresh');
+      loadOrders(forceSync: false);
+    });
+    _logger.info('⏰ OrderNotifier: Periyodik refresh başlatıldı (30 saniye)');
+  }
+
+  /// Real-time subscription başlatır
+  void _startRealtimeSubscription() {
+    if (_syncService == null) {
+      _logger.warning(
+          '⚠️ OrderNotifier: Supabase service mevcut değil, real-time sync devre dışı');
+      return;
+    }
+
+    try {
+      _realtimeChannel = _syncService.subscribeToOrderChanges((orderData) {
+        _logger.info('🔴 OrderNotifier: Real-time güncelleme alındı');
+        // Hemen yeni veriyi yükle (cache'i bypass et)
+        loadOrders(isRealtimeUpdate: true);
+      });
+
+      state = state.copyWith(isRealTimeConnected: true);
+      _logger.info('🔴 OrderNotifier: Real-time subscription başlatıldı');
+    } catch (e) {
+      _logger.warning(
+          '⚠️ OrderNotifier: Real-time subscription başlatılamadı: $e');
+      state = state.copyWith(isRealTimeConnected: false);
+    }
+  }
+
+  /// Real-time subscription'ı durdurur
+  void _stopRealtimeSubscription() {
+    if (_realtimeChannel != null && _syncService != null) {
+      _syncService.unsubscribeFromOrderChanges(_realtimeChannel!);
+      _realtimeChannel = null;
+      state = state.copyWith(isRealTimeConnected: false);
+      _logger.info('🔴 OrderNotifier: Real-time subscription durduruldu');
+    }
+  }
+
+  /// Ekran focus durumunda çağrılacak method
+  void onScreenFocus() {
+    _logger.info('👁️ OrderNotifier: Ekran focus alındı, verileri yenileniyor');
+    loadOrders(forceSync: true);
   }
 
   /// Hybrid approach: Local data ile hemen yükle, ardından Supabase'den sync yap
@@ -74,10 +141,14 @@ class OrderNotifier extends StateNotifier<OrderState> {
     String? searchQuery,
     OrderStatus? filterStatus,
     bool forceSync = false,
+    bool isRealtimeUpdate = false,
   }) async {
     try {
-      state = state.copyWith(
-          isLoading: true, clearError: true, clearSuccessMessage: true);
+      // Real-time update ise loading gösterme
+      if (!isRealtimeUpdate) {
+        state = state.copyWith(
+            isLoading: true, clearError: true, clearSuccessMessage: true);
+      }
 
       // 1. Önce local verilerden yükle (hızlı)
       final localOrders = await _repository.getOrders(
@@ -86,7 +157,8 @@ class OrderNotifier extends StateNotifier<OrderState> {
       state = state.copyWith(orders: localOrders, isLoading: false);
 
       // 2. Eğer Supabase service varsa, background'da sync yap
-      if (_syncService != null && (forceSync || SupabaseService.isOnline)) {
+      if (_syncService != null &&
+          (forceSync || SupabaseService.isOnline || isRealtimeUpdate)) {
         await _syncFromSupabase(
             searchQuery: searchQuery, filterStatus: filterStatus);
       }

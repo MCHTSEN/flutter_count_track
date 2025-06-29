@@ -14,16 +14,42 @@ class DashboardScreen extends ConsumerStatefulWidget {
   ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
 }
 
-class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+class _DashboardScreenState extends ConsumerState<DashboardScreen>
+    with WidgetsBindingObserver {
   bool _isGeneratingData = false;
 
   @override
   void initState() {
     super.initState();
+    // App lifecycle observer'ı kaydet
+    WidgetsBinding.instance.addObserver(this);
+
     // Dashboard verilerini yükle
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(dashboardNotifierProvider.notifier).loadDashboardData();
+      _onScreenFocus();
     });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+
+    // Uygulama foreground'a geçtiğinde refresh et
+    if (state == AppLifecycleState.resumed) {
+      _onScreenFocus();
+    }
+  }
+
+  /// Ekran focus alındığında çağrılır
+  void _onScreenFocus() {
+    print('👁️ DashboardScreen: Focus alındı, verileri yenileniyor');
+    ref.read(dashboardNotifierProvider.notifier).onScreenFocus();
   }
 
   @override
@@ -32,18 +58,66 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     final isLoading = dashboardState.isLoading;
     final error = dashboardState.error;
     final stats = dashboardState.stats;
+    final lastRefreshTime = dashboardState.lastRefreshTime;
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Dashboard - Genel Bakış'),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Dashboard - Genel Bakış'),
+            if (lastRefreshTime != null)
+              Text(
+                'Son güncelleme: ${lastRefreshTime.hour.toString().padLeft(2, '0')}:${lastRefreshTime.minute.toString().padLeft(2, '0')}',
+                style: const TextStyle(
+                    fontSize: 12, fontWeight: FontWeight.normal),
+              ),
+          ],
+        ),
         backgroundColor: Colors.blue[700],
         foregroundColor: Colors.white,
         actions: [
+          // Real-time status indicator
+          Container(
+            margin: const EdgeInsets.only(right: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.green.withOpacity(0.5)),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(Icons.update, size: 14, color: Colors.green),
+                SizedBox(width: 4),
+                Text(
+                  '60s',
+                  style: TextStyle(
+                    fontSize: 10,
+                    color: Colors.green,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
           IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () {
-              ref.read(dashboardNotifierProvider.notifier).refreshData();
-            },
+            icon: isLoading
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  )
+                : const Icon(Icons.refresh),
+            onPressed: isLoading
+                ? null
+                : () {
+                    ref.read(dashboardNotifierProvider.notifier).refreshData();
+                  },
             tooltip: 'Verileri Yenile',
           ),
           PopupMenuButton<String>(
