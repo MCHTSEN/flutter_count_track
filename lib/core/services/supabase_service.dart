@@ -7,6 +7,36 @@ import 'package:flutter_count_track/core/database/app_database.dart';
 import 'package:logging/logging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+/// Arkaplanda işlenecek barkod güncellemesi
+class BarcodeUpdate {
+  final String orderCode;
+  final String barcode;
+  final int? productId;
+  final int scannedQuantity;
+  final DateTime timestamp;
+  final int retryCount;
+
+  BarcodeUpdate({
+    required this.orderCode,
+    required this.barcode,
+    required this.productId,
+    required this.scannedQuantity,
+    required this.timestamp,
+    required this.retryCount,
+  });
+
+  BarcodeUpdate copyWith({int? retryCount}) {
+    return BarcodeUpdate(
+      orderCode: orderCode,
+      barcode: barcode,
+      productId: productId,
+      scannedQuantity: scannedQuantity,
+      timestamp: timestamp,
+      retryCount: retryCount ?? this.retryCount,
+    );
+  }
+}
+
 /// Supabase servislerini yöneten ana sınıf
 /// Offline-first yaklaşım ile hybrid sync sistemi sağlar
 class SupabaseService {
@@ -134,6 +164,10 @@ class SupabaseSyncService {
   late final AppDatabase _localDb;
   late final SupabaseClient _supabaseClient;
 
+  // Background queue sistemi
+  final List<BarcodeUpdate> _backgroundQueue = [];
+  Timer? _backgroundTimer;
+
   SupabaseSyncService({
     required AppDatabase localDatabase,
     required SupabaseClient supabaseClient,
@@ -246,94 +280,40 @@ class SupabaseSyncService {
 
   /// Ürünleri local database ile sync eder
   Future<void> syncProductsWithLocal() async {
-    if (!SupabaseService.isOnline) {
-      _logger.warning('⚠️ Offline durumda - ürün sync atlandı');
-      return;
-    }
-
     try {
-      _logger.info('🔄 Ürün sync başlatıldı');
+      _logger.info('🔄 Ürünler sync ediliyor...');
 
+      // Supabase'den ürünleri çek
       final remoteProducts = await fetchProductsFromSupabase();
 
       for (final remoteProductData in remoteProducts) {
-        await _syncSingleProduct(remoteProductData);
+        final productCode = remoteProductData['our_product_code'] as String;
+
+        // Local'de bu ürün var mı kontrol et
+        final existingProduct = await (_localDb.select(_localDb.products)
+              ..where((p) => p.ourProductCode.equals(productCode)))
+            .getSingleOrNull();
+
+        if (existingProduct == null) {
+          // Local'de yok, ekle
+          await _insertProductFromRemote(remoteProductData);
+        } else {
+          // Local'de var, güncelle
+          await _updateProductFromRemote(existingProduct, remoteProductData);
+        }
       }
 
-      _logger.info('✅ Ürün sync tamamlandı: ${remoteProducts.length} ürün');
+      _logger.info('✅ Ürün sync tamamlandı');
     } catch (e, stackTrace) {
       _logger.severe('💥 Ürün sync hatası', e, stackTrace);
       rethrow;
     }
   }
 
-  /// Tek bir ürünü sync eder
-  Future<void> _syncSingleProduct(
-      Map<String, dynamic> remoteProductData) async {
-    try {
-      final remoteId = remoteProductData['id'] as int;
-      final ourProductCode = remoteProductData['our_product_code'] as String;
-
-      // Önce ID ile kontrol et
-      final existingProductById = await (_localDb.select(_localDb.products)
-            ..where((p) => p.id.equals(remoteId)))
-          .getSingleOrNull();
-
-      if (existingProductById != null) {
-        // ID ile eşleşen var, güncelle
-        _logger
-            .info('🔄 Ürün ID ile güncelleniyor: $remoteId - $ourProductCode');
-        await _updateProductFromRemote(existingProductById, remoteProductData);
-        return;
-      }
-
-      // ID ile eşleşen yok, product code ile kontrol et
-      final existingProductByCode = await (_localDb.select(_localDb.products)
-            ..where((p) => p.ourProductCode.equals(ourProductCode)))
-          .getSingleOrNull();
-
-      if (existingProductByCode != null) {
-        // Product code ile eşleşen var ama ID farklı - bu durumda ID'yi güncelle
-        _logger.info(
-            '🔄 Ürün ID değiştiriliyor: ${existingProductByCode.id} -> $remoteId - $ourProductCode');
-
-        // Önce eski kaydı sil
-        await (_localDb.delete(_localDb.products)
-              ..where((p) => p.id.equals(existingProductByCode.id)))
-            .go();
-
-        // Yeni ID ile ekle
-        await _insertProductFromRemoteWithId(remoteProductData);
-      } else {
-        // Hiç yok, yeni ekle
-        _logger.info(
-            '📥 Yeni ürün local\'e ekleniyor: $remoteId - $ourProductCode');
-        await _insertProductFromRemoteWithId(remoteProductData);
-      }
-    } catch (e, stackTrace) {
-      _logger.severe('💥 Tek ürün sync hatası', e, stackTrace);
-    }
-  }
-
-  /// Remote'dan gelen ürünü local'e ekler
+  /// Remote'dan gelen veri ile yeni ürün ekler
   Future<void> _insertProductFromRemote(
       Map<String, dynamic> remoteProductData) async {
     final productCompanion = ProductsCompanion(
-      ourProductCode: Value(remoteProductData['our_product_code']),
-      name: Value(remoteProductData['name']),
-      barcode: Value(remoteProductData['barcode']),
-      isUniqueBarcodeRequired:
-          Value(remoteProductData['is_unique_barcode_required'] ?? false),
-    );
-
-    await _localDb.into(_localDb.products).insert(productCompanion);
-  }
-
-  /// Remote'dan gelen ürünü ID'si ile birlikte local'e ekler
-  Future<void> _insertProductFromRemoteWithId(
-      Map<String, dynamic> remoteProductData) async {
-    final productCompanion = ProductsCompanion(
-      id: Value(remoteProductData['id'] as int),
       ourProductCode: Value(remoteProductData['our_product_code']),
       name: Value(remoteProductData['name']),
       barcode: Value(remoteProductData['barcode']),
@@ -479,66 +459,196 @@ class SupabaseSyncService {
     await _supabaseClient.removeChannel(channel);
     _logger.info('🔴 Realtime subscription kaldırıldı');
   }
+
+  /// Barkod okuma verilerini Supabase'e gönderir (arkaplanda)
+  Future<void> pushBarcodeReadToSupabase({
+    required String orderCode,
+    required String barcode,
+    required int? productId,
+    required int scannedQuantity,
+  }) async {
+    // Background işlem olarak çalıştır
+    unawaited(_pushBarcodeReadToSupabaseBackground(
+      orderCode: orderCode,
+      barcode: barcode,
+      productId: productId,
+      scannedQuantity: scannedQuantity,
+    ));
+  }
+
+  /// Arkaplanda barkod okuma verilerini Supabase'e gönderir
+  Future<void> _pushBarcodeReadToSupabaseBackground({
+    required String orderCode,
+    required String barcode,
+    required int? productId,
+    required int scannedQuantity,
+  }) async {
+    if (!SupabaseService.isOnline) {
+      _logger
+          .warning('⚠️ Offline durumda - barkod okuma sync kuyruğuna eklendi');
+      // Offline durumunda queue'ya ekle
+      _addToBackgroundQueue(BarcodeUpdate(
+        orderCode: orderCode,
+        barcode: barcode,
+        productId: productId,
+        scannedQuantity: scannedQuantity,
+        timestamp: DateTime.now(),
+        retryCount: 0,
+      ));
+      return;
+    }
+
+    try {
+      _logger.info(
+          '📤 Barkod okuma Supabase\'e gönderiliyor (arkaplanda): $barcode');
+
+      // Önce siparişin ID'sini bul
+      final orderResponse = await _supabaseClient
+          .from('orders')
+          .select('id')
+          .eq('order_code', orderCode)
+          .single();
+
+      final orderId = orderResponse['id'];
+
+      // Eğer productId varsa, sipariş kalemi güncelle
+      if (productId != null) {
+        await _supabaseClient
+            .from('order_items')
+            .update({
+              'scanned_quantity': scannedQuantity,
+              'updated_at': DateTime.now().toIso8601String(),
+            })
+            .eq('order_id', orderId)
+            .eq('product_id', productId);
+      }
+
+      _logger.info(
+          '✅ Barkod okuma başarıyla Supabase\'e gönderildi (arkaplanda): $barcode');
+    } catch (e, stackTrace) {
+      _logger.warning(
+          '⚠️ Barkod okuma Supabase\'e gönderme hatası (arkaplanda) - queue\'ya eklendi',
+          e);
+
+      // Hata durumunda queue'ya ekle
+      _addToBackgroundQueue(BarcodeUpdate(
+        orderCode: orderCode,
+        barcode: barcode,
+        productId: productId,
+        scannedQuantity: scannedQuantity,
+        timestamp: DateTime.now(),
+        retryCount: 0,
+      ));
+    }
+  }
+
+  /// Background queue'ya barkod güncellemesi ekler
+  void _addToBackgroundQueue(BarcodeUpdate update) {
+    _backgroundQueue.add(update);
+    _logger.info(
+        '📝 Barkod okuma queue\'ya eklendi: ${update.barcode} (Queue size: ${_backgroundQueue.length})');
+
+    // Timer'ı başlat (eğer çalışmıyorsa)
+    _startBackgroundTimer();
+  }
+
+  /// Background timer'ı başlatır
+  void _startBackgroundTimer() {
+    if (_backgroundTimer != null && _backgroundTimer!.isActive) {
+      return; // Zaten çalışıyor
+    }
+
+    _backgroundTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+      _processBackgroundQueue();
+    });
+
+    _logger.info('⏰ Background timer başlatıldı (30 saniye aralık)');
+  }
+
+  /// Background queue'daki güncellemeleri işler
+  Future<void> _processBackgroundQueue() async {
+    if (_backgroundQueue.isEmpty) {
+      return;
+    }
+
+    if (!SupabaseService.isOnline) {
+      _logger.info(
+          '⚠️ Offline durumda - background queue işlenmiyor (${_backgroundQueue.length} item)');
+      return;
+    }
+
+    _logger.info(
+        '🔄 Background queue işleniyor (${_backgroundQueue.length} item)');
+
+    final itemsToProcess = List<BarcodeUpdate>.from(_backgroundQueue);
+    _backgroundQueue.clear();
+
+    for (final update in itemsToProcess) {
+      try {
+        await _processSingleBarcodeUpdate(update);
+        _logger.info('✅ Background queue item işlendi: ${update.barcode}');
+      } catch (e) {
+        _logger.warning(
+            '⚠️ Background queue item hatası: ${update.barcode}', e);
+
+        // Retry limiti kontrolü (maksimum 3 deneme)
+        if (update.retryCount < 3) {
+          _backgroundQueue
+              .add(update.copyWith(retryCount: update.retryCount + 1));
+          _logger.info(
+              '🔄 Retry queue\'ya eklendi: ${update.barcode} (${update.retryCount + 1}/3)');
+        } else {
+          _logger.severe(
+              '💥 Background queue item başarısız (max retry): ${update.barcode}');
+        }
+      }
+    }
+  }
+
+  /// Tek bir barkod güncellemesini işler
+  Future<void> _processSingleBarcodeUpdate(BarcodeUpdate update) async {
+    // Önce siparişin ID'sini bul
+    final orderResponse = await _supabaseClient
+        .from('orders')
+        .select('id')
+        .eq('order_code', update.orderCode)
+        .single();
+
+    final orderId = orderResponse['id'];
+
+    // Eğer productId varsa, sipariş kalemi güncelle
+    if (update.productId != null) {
+      await _supabaseClient
+          .from('order_items')
+          .update({
+            'scanned_quantity': update.scannedQuantity,
+            'updated_at': DateTime.now().toIso8601String(),
+          })
+          .eq('order_id', orderId)
+          .eq('product_id', update.productId!);
+
+      _logger.info(
+          '📤 Order item güncellendi: OrderCode=${update.orderCode}, ProductId=${update.productId}, Quantity=${update.scannedQuantity}');
+    }
+  }
+
+  /// Background timer'ı durdurur
+  void _stopBackgroundTimer() {
+    _backgroundTimer?.cancel();
+    _backgroundTimer = null;
+    _logger.info('⏹️ Background timer durduruldu');
+  }
+
+  /// Bekleyen queue'yu işlemeye zorlar (manuel tetikleme)
+  Future<void> forceProcessQueue() async {
+    _logger.info('🚀 Background queue manuel tetiklendi');
+    await _processBackgroundQueue();
+  }
+
+  /// Service'i temizler
+  void dispose() {
+    _stopBackgroundTimer();
+    _backgroundQueue.clear();
+    _logger.info('✅ SupabaseSyncService temizlendi');
+  }
 }
-
-
-
-
-// API MALIYETLERINDEN DOLAYI KAPATILAN OZELLIKLER
-
- /// Barkod okuma verilerini Supabase'e gönderir
-  // Future<void> pushBarcodeReadToSupabase({
-  //   required String orderCode,
-  //   required String barcode,
-  //   required int? productId,
-  //   required int scannedQuantity,
-  // }) async {
-  //   if (!SupabaseService.isOnline) {
-  //     _logger
-  //         .warning('⚠️ Offline durumda - barkod okuma sync kuyruğuna eklendi');
-  //     // TODO: Sync kuyruğuna ekle
-  //     return;
-  //   }
-
-  //   try {
-  //     _logger.info('📤 Barkod okuma Supabase\'e gönderiliyor: $barcode');
-
-  //     // Önce siparişin ID'sini bul
-  //     final orderResponse = await _supabaseClient
-  //         .from('orders')
-  //         .select('id')
-  //         .eq('order_code', orderCode)
-  //         .single();
-
-  //     final orderId = orderResponse['id'];
-
-  //     // Barkod okuma kaydını oluştur
-  //     final barcodeReadData = {
-  //       'order_id': orderId,
-  //       'product_id': productId,
-  //       'barcode': barcode,
-  //       'read_at': DateTime.now().toIso8601String(),
-  //       'device_id': SupabaseService.deviceId,
-  //     };
-
-  //     await _supabaseClient.from('barcode_reads').insert(barcodeReadData);
-
-  //     // Eğer productId varsa, sipariş kalemi güncelle
-  //     if (productId != null) {
-  //       await _supabaseClient
-  //           .from('order_items')
-  //           .update({
-  //             'scanned_quantity': scannedQuantity,
-  //             'updated_at': DateTime.now().toIso8601String(),
-  //           })
-  //           .eq('order_id', orderId)
-  //           .eq('product_id', productId);
-  //     }
-
-  //     _logger.info('✅ Barkod okuma başarıyla Supabase\'e gönderildi: $barcode');
-  //   } catch (e, stackTrace) {
-  //     _logger.severe(
-  //         '💥 Barkod okuma Supabase\'e gönderme hatası', e, stackTrace);
-  //     rethrow;
-  //   }
-  // }
