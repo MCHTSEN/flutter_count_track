@@ -21,13 +21,21 @@ class OrderDetailScreen extends ConsumerStatefulWidget {
   ConsumerState<OrderDetailScreen> createState() => _OrderDetailScreenState();
 }
 
-class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
+class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
+    with TickerProviderStateMixin {
   int _selectedBoxNumber = 1; // Varsayılan olarak Koli 1
 
   // Barkod okuyucu için keyboard listener state
   String _barcodeBuffer = '';
   DateTime? _lastKeyPress;
   final FocusNode _keyboardFocusNode = FocusNode();
+
+  // Animasyon controller'ları
+  late AnimationController _quantityAnimationController;
+  late Animation<double> _quantityScaleAnimation;
+
+  // Son güncellenmiş ürün ID'sini takip et
+  int? _lastUpdatedProductId;
 
   // Barkod okuyucu ayarları
   static const Duration _barcodeTimeout =
@@ -38,6 +46,24 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   @override
   void initState() {
     super.initState();
+
+    // Animasyon controller'ını başlat
+    _quantityAnimationController = AnimationController(
+      duration: const Duration(milliseconds: 400),
+      vsync: this,
+    );
+
+    _quantityScaleAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.3,
+    ).animate(CurvedAnimation(
+      parent: _quantityAnimationController,
+      curve: Curves.elasticOut,
+    ));
+
+    // Sistem haptic feedback'ini devre dışı bırak
+    SystemChannels.textInput.invokeMethod('TextInput.hide');
+
     // Klavye odağını hemen al
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _keyboardFocusNode.requestFocus();
@@ -47,6 +73,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   @override
   void dispose() {
     _keyboardFocusNode.dispose();
+    _quantityAnimationController.dispose();
     super.dispose();
   }
 
@@ -87,7 +114,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           }
         });
 
-        // Debug: Buffer durumunu göster
+        // Debug: Buffer durumunu göster (ses olmadan)
         debugPrint(
             '🔍 Barkod Buffer: $_barcodeBuffer (${_barcodeBuffer.length} karakter)');
       }
@@ -136,6 +163,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
     return RawKeyboardListener(
       focusNode: _keyboardFocusNode,
       autofocus: true,
+      includeSemantics: false,
       onKey: _handleKeyEvent,
       child: Scaffold(
         backgroundColor: Colors.grey[100],
@@ -331,8 +359,10 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
 
     return Column(
       children: [
-        // Bildirim alanı - üstte sabit
-        BarcodeNotificationWidget(state: barcodeState),
+        // Bildirim alanı - sadece hata ve uyarılar için
+        if (barcodeState.status != BarcodeStatus.none &&
+            barcodeState.status != BarcodeStatus.success)
+          BarcodeNotificationWidget(state: barcodeState),
 
         // Ana grid layout
         Expanded(
@@ -624,6 +654,12 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     onPressed: _barcodeBuffer.isNotEmpty
                         ? () {
                             _processBarcodeFromBuffer();
+                            // İşleme sonrası focus'u keyboard listener'a geri dön
+                            Future.delayed(const Duration(milliseconds: 100),
+                                () {
+                              FocusScope.of(context).unfocus();
+                              _keyboardFocusNode.requestFocus();
+                            });
                           }
                         : null,
                     icon: const Icon(Icons.check, size: 24),
@@ -646,6 +682,12 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                     onPressed: _barcodeBuffer.isNotEmpty
                         ? () {
                             _clearBarcodeBuffer();
+                            // Temizleme sonrası focus'u keyboard listener'a geri dön
+                            Future.delayed(const Duration(milliseconds: 100),
+                                () {
+                              FocusScope.of(context).unfocus();
+                              _keyboardFocusNode.requestFocus();
+                            });
                           }
                         : null,
                     icon: const Icon(Icons.clear, size: 20),
@@ -1207,6 +1249,12 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                           setState(() {
                             _selectedBoxNumber = value;
                           });
+
+                          // Dropdown seçimi sonrası focus'u kaldır ve keyboard listener'a geri dön
+                          Future.delayed(const Duration(milliseconds: 100), () {
+                            FocusScope.of(context).unfocus();
+                            _keyboardFocusNode.requestFocus();
+                          });
                         }
                       },
                     ),
@@ -1221,6 +1269,12 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                                   ? availableBoxes.last
                                   : 0) +
                               1;
+                        });
+
+                        // Buton tıklaması sonrası focus'u keyboard listener'a geri dön
+                        Future.delayed(const Duration(milliseconds: 100), () {
+                          FocusScope.of(context).unfocus();
+                          _keyboardFocusNode.requestFocus();
                         });
                       },
                       icon: const Icon(Icons.add_box_outlined),
@@ -1439,13 +1493,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text(
+              _buildAnimatedQuantityTextLarge(
                 '${orderItem.scannedQuantity}/${orderItem.quantity}',
-                style: TextStyle(
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: isCompleted ? Colors.green[700] : Colors.blue[700],
-                ),
+                product?.id,
               ),
               Text(
                 '${(progress * 100).toInt()}%',
@@ -1549,13 +1599,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Text(
+            _buildAnimatedQuantityText(
               '${orderItem.scannedQuantity}/${orderItem.quantity}',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: isCompleted ? Colors.green[700] : Colors.blue[700],
-              ),
+              product?.id,
             ),
             Text(
               '${(progress * 100).toInt()}%',
@@ -1702,6 +1748,11 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
 
   void _processBarcodeInput(
       BuildContext context, WidgetRef ref, Order order, String barcode) {
+    // Barkod işleme öncesi mevcut state'i kaydet
+    final currentState =
+        ref.read(orderDetailNotifierProvider(widget.orderCode));
+    final currentItemDetails = currentState.orderItemDetails ?? [];
+
     ref.read(barcodeNotifierProvider.notifier).processBarcode(
           barcode: barcode,
           orderId: order.id,
@@ -1711,7 +1762,108 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
             ref
                 .read(orderDetailNotifierProvider(widget.orderCode).notifier)
                 .refreshOrderDetails();
+
+            // Başarılı okuma sonrası animasyonu tetikle
+            _triggerQuantityAnimation(currentItemDetails, barcode);
           },
         );
+  }
+
+  /// Başarılı barkod okuma sonrası miktar animasyonunu tetikler
+  void _triggerQuantityAnimation(
+      List<OrderItemDetail> previousItemDetails, String barcode) {
+    // Kısa bir gecikme sonrası yeni state'i kontrol et
+    Future.delayed(const Duration(milliseconds: 100), () {
+      final newState = ref.read(orderDetailNotifierProvider(widget.orderCode));
+      final newItemDetails = newState.orderItemDetails ?? [];
+
+      // Hangi ürünün miktarı arttı bul
+      for (int i = 0;
+          i < newItemDetails.length && i < previousItemDetails.length;
+          i++) {
+        final oldQuantity = previousItemDetails[i].orderItem.scannedQuantity;
+        final newQuantity = newItemDetails[i].orderItem.scannedQuantity;
+
+        if (newQuantity > oldQuantity) {
+          setState(() {
+            _lastUpdatedProductId = newItemDetails[i].orderItem.productId;
+          });
+
+          // Animasyonu başlat
+          _quantityAnimationController.forward().then((_) {
+            _quantityAnimationController.reverse();
+          });
+          break;
+        }
+      }
+    });
+  }
+
+  /// Animasyonlu miktar gösterici widget'ı
+  Widget _buildAnimatedQuantityText(String text, int? productId) {
+    final isAnimating = _lastUpdatedProductId == productId;
+
+    if (!isAnimating) {
+      return Text(
+        text,
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.bold,
+        ),
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: _quantityScaleAnimation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _quantityScaleAnimation.value,
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: _quantityScaleAnimation.value > 1.1
+                  ? Colors.green[600]
+                  : null,
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  /// Büyük animasyonlu miktar gösterici (recent product cards için)
+  Widget _buildAnimatedQuantityTextLarge(String text, int? productId) {
+    final isAnimating = _lastUpdatedProductId == productId;
+
+    if (!isAnimating) {
+      return Text(
+        text,
+        style: const TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+        ),
+      );
+    }
+
+    return AnimatedBuilder(
+      animation: _quantityScaleAnimation,
+      builder: (context, child) {
+        return Transform.scale(
+          scale: _quantityScaleAnimation.value,
+          child: Text(
+            text,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: _quantityScaleAnimation.value > 1.1
+                  ? Colors.green[600]
+                  : null,
+            ),
+          ),
+        );
+      },
+    );
   }
 }

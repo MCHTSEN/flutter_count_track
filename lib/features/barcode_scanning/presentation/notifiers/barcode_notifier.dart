@@ -69,7 +69,8 @@ class BarcodeNotifier extends StateNotifier<BarcodeState> {
       case BarcodeProcessResult.success:
         message = 'Barkod başarıyla okundu.';
         status = BarcodeStatus.success;
-        await _soundService.playSound(SoundType.success);
+        // Ses çalmayı devre dışı bırak - sadece animasyon göster
+        // await _soundService.playSound(SoundType.success);
         onOrderUpdated(); // Sipariş verilerini güncelle
         break;
       case BarcodeProcessResult.duplicateUniqueBarcode:
