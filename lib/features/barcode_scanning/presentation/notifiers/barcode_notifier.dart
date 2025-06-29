@@ -37,6 +37,13 @@ class BarcodeState {
   }
 }
 
+// Overlay gösterme callback tipi
+typedef OverlayCallback = void Function(
+  BuildContext context,
+  BarcodeStatus status,
+  String message,
+);
+
 class BarcodeNotifier extends StateNotifier<BarcodeState> {
   final ProcessBarcodeUseCase _processBarcodeUseCase;
   final SoundService _soundService;
@@ -50,7 +57,12 @@ class BarcodeNotifier extends StateNotifier<BarcodeState> {
     required String customerName,
     required VoidCallback onOrderUpdated,
     int? boxNumber,
+    OverlayCallback? onShowOverlay,
+    BuildContext? context,
   }) async {
+    // Mounted kontrolü - dispose edildiyse işlem yapma
+    if (!mounted) return;
+
     if (state.isProcessing) return;
 
     state = state.copyWith(isProcessing: true);
@@ -62,6 +74,9 @@ class BarcodeNotifier extends StateNotifier<BarcodeState> {
       boxNumber: boxNumber,
     );
 
+    // Async işlem sonrası mounted kontrolü
+    if (!mounted) return;
+
     String message;
     BarcodeStatus status;
 
@@ -69,46 +84,69 @@ class BarcodeNotifier extends StateNotifier<BarcodeState> {
       case BarcodeProcessResult.success:
         message = 'Barkod başarıyla okundu.';
         status = BarcodeStatus.success;
-        // Ses çalmayı devre dışı bırak - sadece animasyon göster
-        // await _soundService.playSound(SoundType.success);
+        // Başarı için sadece ses çal, overlay gösterme
+        await _soundService.playSound(SoundType.success);
         onOrderUpdated(); // Sipariş verilerini güncelle
         break;
       case BarcodeProcessResult.duplicateUniqueBarcode:
         message = 'Bu barkod zaten okutuldu!';
         status = BarcodeStatus.warning;
+        // Hata durumları için hem ses hem overlay
         await _soundService.playSound(SoundType.warning);
         break;
       case BarcodeProcessResult.productNotFound:
         message = 'Barkod bulunamadı!';
         status = BarcodeStatus.error;
+        // Hata durumları için hem ses hem overlay
         await _soundService.playSound(SoundType.error);
         break;
       case BarcodeProcessResult.productNotInOrder:
         message = 'Ürün bu siparişte bulunmuyor!';
         status = BarcodeStatus.error;
+        // Hata durumları için hem ses hem overlay
         await _soundService.playSound(SoundType.error);
         break;
       case BarcodeProcessResult.orderItemAlreadyComplete:
         message = 'Bu ürün için gerekli miktar zaten okutuldu!';
         status = BarcodeStatus.warning;
+        // Hata durumları için hem ses hem overlay
         await _soundService.playSound(SoundType.warning);
         break;
     }
 
+    // State güncelleme öncesi mounted kontrolü
+    if (!mounted) return;
+
+    // State'i güncelle
     state = state.copyWith(
       status: status,
       message: message,
       isProcessing: false,
     );
 
-    // 3 saniye sonra durum mesajını temizle
-    await Future.delayed(const Duration(seconds: 3));
-    if (mounted) {
-      state = state.copyWith(
-        status: BarcodeStatus.none,
-        message: '',
-      );
+    // Overlay callback'i varsa çağır
+    if (onShowOverlay != null && context != null) {
+      onShowOverlay(context, status, message);
     }
+
+    // State'i temizle (geçici durum için)
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (mounted) {
+        state = state.copyWith(
+          status: BarcodeStatus.none,
+          message: '',
+        );
+      }
+    });
+  }
+
+  void clearStatus() {
+    if (!mounted) return;
+
+    state = state.copyWith(
+      status: BarcodeStatus.none,
+      message: '',
+    );
   }
 }
 

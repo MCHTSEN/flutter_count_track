@@ -31,9 +31,8 @@ class ProcessBarcodeUseCase {
 
     if (product == null) {
       print('❌ ProcessBarcode: Ürün bulunamadı');
-      // Ürün bulunamasa bile okuma denemesini kaydet
-      await _barcodeRepository.logBarcodeRead(orderId, null, barcode,
-          boxNumber: boxNumber);
+      // Başarısız okumalar kayıt edilmemeli - koli dropdown bug'ını önlemek için
+      // await _barcodeRepository.logBarcodeRead(orderId, null, barcode, boxNumber: boxNumber);
       return BarcodeProcessResult.productNotFound;
     }
 

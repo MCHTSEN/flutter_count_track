@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_count_track/core/utils/sample_data_generator.dart';
 import 'package:flutter_count_track/features/dashboard/presentation/components/charts_section.dart';
 import 'package:flutter_count_track/features/dashboard/presentation/components/dashboard_header.dart';
 import 'package:flutter_count_track/features/dashboard/presentation/components/dashboard_state_widgets.dart';
@@ -16,7 +15,7 @@ class DashboardScreen extends ConsumerStatefulWidget {
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen>
     with WidgetsBindingObserver {
-  bool _isGeneratingData = false;
+  final bool _isGeneratingData = false;
 
   @override
   void initState() {
@@ -120,25 +119,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
                   },
             tooltip: 'Verileri Yenile',
           ),
-          PopupMenuButton<String>(
-            onSelected: (value) async {
-              if (value == 'generate_sample_data') {
-                await _generateSampleData();
-              }
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'generate_sample_data',
-                child: Row(
-                  children: [
-                    Icon(Icons.data_usage),
-                    SizedBox(width: 8),
-                    Text('Örnek Veri Oluştur'),
-                  ],
-                ),
-              ),
-            ],
-          ),
         ],
       ),
       body: RefreshIndicator(
@@ -182,53 +162,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
               // Veri yoksa bilgi mesajı
               if (!isLoading && stats != null && stats.totalOrders == 0)
-                DashboardNoDataWidget(
-                  onGenerateSampleData: _generateSampleData,
-                ),
+                Text('Veri yok'),
             ],
           ),
         ),
       ),
     );
-  }
-
-  Future<void> _generateSampleData() async {
-    setState(() {
-      _isGeneratingData = true;
-    });
-
-    try {
-      final database = ref.read(databaseProvider);
-      final generator = SampleDataGenerator(database);
-
-      await generator.generateSampleData();
-
-      // Verileri yenile
-      await ref.read(dashboardNotifierProvider.notifier).refreshData();
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Örnek veriler başarıyla oluşturuldu!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Örnek veri oluşturulurken hata: ${e.toString()}'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isGeneratingData = false;
-        });
-      }
-    }
   }
 }

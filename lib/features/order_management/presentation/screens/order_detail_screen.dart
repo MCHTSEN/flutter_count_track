@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_count_track/core/database/app_database.dart'; // For Order, OrderItem
 import 'package:flutter_count_track/features/barcode_scanning/presentation/notifiers/barcode_notifier.dart';
-import 'package:flutter_count_track/features/barcode_scanning/presentation/widgets/barcode_notification_widget.dart';
+import 'package:flutter_count_track/features/barcode_scanning/presentation/widgets/barcode_overlay_notification.dart';
 import 'package:flutter_count_track/features/order_management/presentation/notifiers/order_detail_notifier.dart';
 import 'package:flutter_count_track/features/order_management/presentation/notifiers/order_providers.dart';
 import 'package:flutter_count_track/features/order_management/presentation/screens/box_management_screen.dart';
@@ -80,6 +80,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
     _keyboardFocusNode.dispose();
     _quantityAnimationController.dispose();
     WidgetsBinding.instance.removeObserver(this);
+    // Overlay service'i temizle
+    BarcodeOverlayService.instance.dispose();
     super.dispose();
   }
 
@@ -95,6 +97,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
 
   /// Ekran focus alındığında çağrılır
   void _onScreenFocus() {
+    if (!mounted) return;
+
     print('👁️ OrderDetailScreen: Focus alındı, verileri yenileniyor');
     ref
         .read(orderDetailNotifierProvider(widget.orderCode).notifier)
@@ -147,6 +151,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
 
   /// Buffer'dan barkodu işler
   void _processBarcodeFromBuffer() {
+    if (!mounted) return;
+
     if (_barcodeBuffer.length >= _minBarcodeLength) {
       final barcode = _barcodeBuffer.trim();
       debugPrint('✅ Barkod işleniyor: $barcode');
@@ -167,6 +173,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
 
   /// Barkod buffer'ını temizler (UI güncellemeli)
   void _clearBarcodeBuffer() {
+    if (!mounted) return;
+
     setState(() {
       _clearBarcodeBufferInternal();
     });
@@ -182,7 +190,6 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(orderDetailNotifierProvider(widget.orderCode));
-    final barcodeState = ref.watch(barcodeNotifierProvider);
 
     return RawKeyboardListener(
       focusNode: _keyboardFocusNode,
@@ -259,7 +266,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
             ),
           ],
         ),
-        body: _buildBody(context, ref, state, barcodeState),
+        body: _buildBody(context, ref, state),
       ),
     );
   }
@@ -310,8 +317,8 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
     }
   }
 
-  Widget _buildBody(BuildContext context, WidgetRef ref, OrderDetailState state,
-      BarcodeState barcodeState) {
+  Widget _buildBody(
+      BuildContext context, WidgetRef ref, OrderDetailState state) {
     if (state.isLoading) {
       return const Center(child: LoadingIndicator());
     }
@@ -383,12 +390,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
 
     return Column(
       children: [
-        // Bildirim alanı - sadece hata ve uyarılar için
-        if (barcodeState.status != BarcodeStatus.none &&
-            barcodeState.status != BarcodeStatus.success)
-          BarcodeNotificationWidget(state: barcodeState),
-
-        // Ana grid layout
+        // Ana grid layout (overlay notification artık inline değil)
         Expanded(
           child: Padding(
             padding: const EdgeInsets.all(16.0),
@@ -1772,6 +1774,9 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
 
   void _processBarcodeInput(
       BuildContext context, WidgetRef ref, Order order, String barcode) {
+    // Screen dispose kontrolü
+    if (!mounted) return;
+
     // Barkod işleme öncesi mevcut state'i kaydet
     final currentState =
         ref.read(orderDetailNotifierProvider(widget.orderCode));
@@ -1782,7 +1787,26 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
           orderId: order.id,
           customerName: order.customerName,
           boxNumber: _selectedBoxNumber,
+          context: context,
+          onShowOverlay: (context, status, message) {
+            // Screen hala mount edilmiş mi kontrol et
+            if (!mounted) return;
+
+            // Success durumunda overlay gösterme, sadece hata/uyarılarda göster
+            if (status == BarcodeStatus.success) return;
+
+            // Overlay service'i kullanarak göster
+            BarcodeOverlayService.instance.showBarcodeStatus(
+              context,
+              status,
+              message,
+              duration: const Duration(seconds: 3),
+            );
+          },
           onOrderUpdated: () {
+            // Screen hala mount edilmiş mi kontrol et
+            if (!mounted) return;
+
             ref
                 .read(orderDetailNotifierProvider(widget.orderCode).notifier)
                 .refreshOrderDetails();
@@ -1796,8 +1820,14 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
   /// Başarılı barkod okuma sonrası miktar animasyonunu tetikler
   void _triggerQuantityAnimation(
       List<OrderItemDetail> previousItemDetails, String barcode) {
+    // Screen dispose kontrolü
+    if (!mounted) return;
+
     // Kısa bir gecikme sonrası yeni state'i kontrol et
     Future.delayed(const Duration(milliseconds: 100), () {
+      // Async gecikme sonrası tekrar kontrol et
+      if (!mounted) return;
+
       final newState = ref.read(orderDetailNotifierProvider(widget.orderCode));
       final newItemDetails = newState.orderItemDetails ?? [];
 
@@ -1809,13 +1839,18 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen>
         final newQuantity = newItemDetails[i].orderItem.scannedQuantity;
 
         if (newQuantity > oldQuantity) {
+          if (!mounted) return; // setState öncesi son kontrol
+
           setState(() {
             _lastUpdatedProductId = newItemDetails[i].orderItem.productId;
           });
 
           // Animasyonu başlat
           _quantityAnimationController.forward().then((_) {
-            _quantityAnimationController.reverse();
+            if (mounted) {
+              // Animation complete callback'inde de kontrol
+              _quantityAnimationController.reverse();
+            }
           });
           break;
         }
