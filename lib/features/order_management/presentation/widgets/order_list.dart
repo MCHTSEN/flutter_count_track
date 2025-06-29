@@ -352,6 +352,11 @@ class _OrderListTileState extends State<OrderListTile>
 
                               const SizedBox(height: 16),
 
+                              // Progress bar - Sipariş durumu
+                              _buildProgressBar(widget.order.status),
+
+                              const SizedBox(height: 16),
+
                               // Alt satır - Müşteri ve tarih
                               Row(
                                 children: [
@@ -536,6 +541,87 @@ class _OrderListTileState extends State<OrderListTile>
 
   String _formatDate(DateTime date) {
     return '${date.day.toString().padLeft(2, '0')}.${date.month.toString().padLeft(2, '0')}.${date.year}';
+  }
+
+  Widget _buildProgressBar(OrderStatus status) {
+    final progressValue = _getProgressValue(status);
+    final statusColor = _getStatusColor(status);
+    final progressText = _getProgressText(status);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              'Sipariş Durumu',
+              style: TextStyle(
+                fontSize: 13,
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+            Text(
+              progressText,
+              style: TextStyle(
+                fontSize: 13,
+                color: statusColor,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Container(
+          height: 8,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(4),
+            color: Colors.grey[200],
+          ),
+          child: FractionallySizedBox(
+            alignment: Alignment.centerLeft,
+            widthFactor: progressValue,
+            child: Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(4),
+                gradient: LinearGradient(
+                  colors: [
+                    statusColor.withOpacity(0.8),
+                    statusColor,
+                  ],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: statusColor.withOpacity(0.3),
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  double _getProgressValue(OrderStatus status) {
+    return switch (status) {
+      OrderStatus.pending => 0.0,
+      OrderStatus.partial => 0.6,
+      OrderStatus.completed => 1.0,
+    };
+  }
+
+  String _getProgressText(OrderStatus status) {
+    return switch (status) {
+      OrderStatus.pending => '%0 Tamamlandı',
+      OrderStatus.partial => '%60 Tamamlandı',
+      OrderStatus.completed => '%100 Tamamlandı',
+    };
   }
 
   String _getStatusText(OrderStatus status) {
