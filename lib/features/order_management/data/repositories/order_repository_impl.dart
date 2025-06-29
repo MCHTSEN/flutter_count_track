@@ -200,6 +200,7 @@ class OrderRepositoryImpl implements OrderRepository {
   }
 
   /// Manuel sync için ayrı metod
+  @override
   Future<List<OrderItem>> getOrderItemsWithSync(String orderCode) async {
     _logger.info(
         '📦 Sipariş kalemleri sync ile çekiliyor - OrderCode: $orderCode');
@@ -432,13 +433,14 @@ class OrderRepositoryImpl implements OrderRepository {
             ..where((p) => p.id.equals(orderItem.productId)))
           .getSingleOrNull();
 
-      // Supabase'e barkod okuma gönder
-      await _syncService.pushBarcodeReadToSupabase(
-        orderCode: order.orderCode,
-        barcode: product?.barcode ?? 'UNKNOWN_BARCODE',
-        productId: orderItem.productId,
-        scannedQuantity: newQuantity,
-      );
+      // API MALIYETLERINDEN DOLAYI KAPATILAN OZELLIKLER
+      // // Supabase'e barkod okuma gönder
+      // await _syncService.pushBarcodeReadToSupabase(
+      //   orderCode: order.orderCode,
+      //   barcode: product?.barcode ?? 'UNKNOWN_BARCODE',
+      //   productId: orderItem.productId,
+      //   scannedQuantity: newQuantity,
+      // );
 
       _logger.info('✅ Barkod okuma Supabase\'e gönderildi');
     } catch (e, stackTrace) {

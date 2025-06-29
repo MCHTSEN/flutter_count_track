@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_count_track/core/database/app_database.dart';
 
-class OrderFilterSection extends StatefulWidget {
+class OrderFilterSection extends StatelessWidget {
   final String searchQuery;
   final OrderStatus? selectedStatus;
   final ValueChanged<String> onSearchChanged;
@@ -18,51 +18,32 @@ class OrderFilterSection extends StatefulWidget {
   });
 
   @override
-  State<OrderFilterSection> createState() => _OrderFilterSectionState();
-}
-
-class _OrderFilterSectionState extends State<OrderFilterSection> {
-  late TextEditingController _searchController;
-
-  @override
-  void initState() {
-    super.initState();
-    _searchController = TextEditingController(text: widget.searchQuery);
-  }
-
-  @override
-  void didUpdateWidget(OrderFilterSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.searchQuery != oldWidget.searchQuery) {
-      _searchController.text = widget.searchQuery;
-    }
-  }
-
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
     return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.all(24),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.grey.withOpacity(0.1),
+            spreadRadius: 0,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Column(
         children: [
-          // Arama ve filtre satırı
+          // Arama ve filtreleme satırı
           Row(
             children: [
               // Arama kutusu
               Expanded(
                 flex: 2,
                 child: TextField(
-                  controller: _searchController,
-                  style: const TextStyle(fontSize: 18),
                   decoration: InputDecoration(
                     hintText: 'Sipariş kodu veya müşteri adı ara...',
-                    hintStyle: TextStyle(color: Colors.grey[500]),
+                    hintStyle: TextStyle(color: Colors.grey[500], fontSize: 16),
                     prefixIcon:
                         Icon(Icons.search, color: Colors.blue[600], size: 28),
                     border: OutlineInputBorder(
@@ -77,7 +58,7 @@ class _OrderFilterSectionState extends State<OrderFilterSection> {
                     contentPadding: const EdgeInsets.symmetric(
                         horizontal: 16, vertical: 16),
                   ),
-                  onChanged: widget.onSearchChanged,
+                  onChanged: onSearchChanged,
                 ),
               ),
 
@@ -94,7 +75,7 @@ class _OrderFilterSectionState extends State<OrderFilterSection> {
                   ),
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<OrderStatus?>(
-                      value: widget.selectedStatus,
+                      value: selectedStatus,
                       hint: Text(
                         'Tüm Durumlar',
                         style: TextStyle(color: Colors.grey[600], fontSize: 16),
@@ -160,102 +141,12 @@ class _OrderFilterSectionState extends State<OrderFilterSection> {
                           ),
                         ),
                       ],
-                      onChanged: widget.onStatusChanged,
+                      onChanged: onStatusChanged,
                     ),
                   ),
                 ),
               ),
             ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // İstatistik kartları
-          _buildStatsRow(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatsRow() {
-    final pendingCount =
-        widget.orders.where((o) => o.status == OrderStatus.pending).length;
-    final partialCount =
-        widget.orders.where((o) => o.status == OrderStatus.partial).length;
-    final completedCount =
-        widget.orders.where((o) => o.status == OrderStatus.completed).length;
-
-    return Row(
-      children: [
-        Expanded(
-          child: _buildStatCard(
-            'Bekliyor',
-            pendingCount.toString(),
-            Colors.orange,
-            Icons.pending_actions,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildStatCard(
-            'Kısmen Gönderildi',
-            partialCount.toString(),
-            Colors.blue,
-            Icons.local_shipping,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildStatCard(
-            'Tamamlandı',
-            completedCount.toString(),
-            Colors.green,
-            Icons.check_circle,
-          ),
-        ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: _buildStatCard(
-            'Toplam',
-            widget.orders.length.toString(),
-            Colors.purple,
-            Icons.inventory,
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildStatCard(
-      String title, String count, Color color, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: color, width: 2),
-      ),
-      child: Column(
-        children: [
-          Icon(icon, color: color, size: 32),
-          const SizedBox(height: 8),
-          Text(
-            count,
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: color,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            title,
-            style: TextStyle(
-              fontSize: 14,
-              color: color,
-              fontWeight: FontWeight.w500,
-            ),
-            textAlign: TextAlign.center,
           ),
         ],
       ),

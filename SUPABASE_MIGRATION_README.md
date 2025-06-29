@@ -1,66 +1,18 @@
-# 🚀 Firebase → Supabase Migration Guide
+# Supabase Integration Guide
 
-## Genel Bakış
+Bu döküman, projenin Supabase entegrasyonu ve kullanımını açıklar.
 
-Bu dokümantasyon, Paketleme Takip Sistemi'nin **Firebase** backend'inden **Supabase** backend'ine geçiş sürecini açıklar. Yeni sistem **offline-first hybrid sync** yaklaşımı ile geliştirilmiştir.
+## Mevcut Durum
 
-## 🔄 Değişiklik Özeti
+Uygulama **offline-first hybrid sync** yaklaşımı ile **4 ana tablo** kullanıyor:
 
-### Eski Sistem (v1.x)
-- ❌ Firebase Firestore
-- ❌ Online-only yaklaşım
-- ❌ Sınırlı offline desteği
-- ❌ Temel conflict handling
+### ✅ Aktif Tablolar
+1. **products** - Ürün bilgileri
+2. **orders** - Sipariş bilgileri
+3. **order_items** - Sipariş kalemleri
+4. **product_code_mappings** - Müşteri ürün kodu eşleştirme
 
-### Yeni Sistem (v2.0)
-- ✅ **Supabase** backend
-- ✅ **Offline-first** yaklaşım
-- ✅ **Hybrid sync** sistemi
-- ✅ **Advanced conflict resolution**
-- ✅ **Real-time updates**
-- ✅ **Comprehensive logging**
-
-## 📁 Değiştirilen Dosyalar
-
-### 1. Bağımlılıklar
-```yaml
-# pubspec.yaml
-dependencies:
-  # ❌ Kaldırılan
-  # firebase_core: ^3.8.0
-  # cloud_firestore: ^5.5.0
-  
-  # ✅ Eklenen
-  supabase_flutter: ^2.10.0
-  logging: ^1.2.0
-```
-
-### 2. Yeni Dosyalar
-```
-✅ lib/core/services/supabase_service.dart
-✅ lib/core/config/supabase_config.dart
-✅ lib/core/services/supabase_service_doc.md
-✅ SUPABASE_MIGRATION_README.md
-```
-
-### 3. Güncellenen Dosyalar
-```
-🔄 lib/main.dart
-🔄 lib/core/database/database_provider.dart
-🔄 lib/features/order_management/data/repositories/order_repository_impl.dart
-🔄 lib/features/order_management/presentation/notifiers/order_providers.dart
-🔄 lib/features/order_management/order_management_doc.md
-🔄 lib/core/database/database_doc.md
-```
-
-### 4. Kaldırılan Dosyalar
-```
-❌ lib/core/services/firebase_service.dart
-```
-
-## 🎯 Ana Özellikler
-
-### 1. Offline-First Yaklaşım
+## Offline-First Yaklaşım
 ```dart
 // Tüm işlemler önce local'de yapılır
 final localOrders = await _getLocalOrders();
@@ -73,66 +25,9 @@ if (SupabaseService.isOnline) {
 return localOrders; // Hemen döndür
 ```
 
-### 2. Hybrid Sync Sistemi
-```dart
-// Barkod okuma örneği
-Future<bool> updateOrderItemScannedQuantity(String orderItemId, int newQuantity) async {
-  // 1. Local güncelle (offline-first)
-  final success = await _updateLocal(orderItemId, newQuantity);
-  
-  // 2. Online ise Supabase'e gönder
-  if (success && SupabaseService.isOnline) {
-    await _syncToSupabase(orderItemId, newQuantity);
-  }
-  
-  return success;
-}
-```
+## Kurulum
 
-### 3. Conflict Resolution
-```dart
-// Timestamp tabanlı çözüm
-if (remoteUpdatedAt.isAfter(localUpdatedAt)) {
-  // Remote kazandı - local'i güncelle
-  await _updateLocalFromRemote(remoteData);
-} else if (localUpdatedAt.isAfter(remoteUpdatedAt)) {
-  // Local kazandı - remote'u güncelle
-  await _pushLocalToRemote(localData);
-}
-```
-
-### 4. Real-time Updates
-```dart
-// Supabase Realtime subscription
-final channel = _supabaseClient
-    .channel('order_changes')
-    .onPostgresChanges(
-      event: PostgresChangeEvent.all,
-      schema: 'public',
-      table: 'orders',
-      callback: (payload) => _handleOrderChange(payload),
-    )
-    .subscribe();
-```
-
-### 5. Comprehensive Logging
-```dart
-// Kategorize edilmiş loglar
-_logger.info('📖 Data fetch operation');      // Data operations
-_logger.info('📤 Data push operation');       // Sync operations  
-_logger.info('🔄 Conflict resolution');       // Conflict handling
-_logger.info('🔴 Realtime update');          // Real-time events
-_logger.info('📶 Connectivity change');       // Network status
-```
-
-## 🛠️ Kurulum ve Yapılandırma
-
-### 1. Bağımlılıkları Güncelle
-```bash
-flutter pub get
-```
-
-### 2. Supabase Konfigürasyonu
+### 1. Supabase Konfigürasyonu
 ```dart
 // lib/core/config/supabase_config.dart
 class SupabaseConfig {
@@ -141,64 +36,8 @@ class SupabaseConfig {
 }
 ```
 
-### 3. Main.dart Konfigürasyonu
-```dart
-void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
-  
-  // Logging başlat
-  _setupLogging();
-  
-  // Supabase başlat
-  await SupabaseService.initialize(
-    url: SupabaseConfig.supabaseUrl,
-    anonKey: SupabaseConfig.supabaseAnonKey,
-  );
-  
-  runApp(MyApp());
-}
-```
-
-## 📊 Veri Akışı
-
-### Eski Sistem (Firebase)
-```
-[UI ACTION] → [FIREBASE] → [NETWORK] → [SUCCESS/ERROR]
-                ↓
-[LOCAL CACHE] ← [OFFLINE LIMITED]
-```
-
-### Yeni Sistem (Supabase)
-```
-[UI ACTION] → [LOCAL DB] → [IMMEDIATE SUCCESS]
-                  ↓
-[ONLINE CHECK] → [SUPABASE SYNC] → [BACKGROUND]
-                      ↓
-[CONFLICT RESOLUTION] → [UPDATE LOCAL] → [UI REFRESH]
-```
-
-## 🔍 Testing ve Debug
-
-### Debug Komutları
-```dart
-// Supabase durumu
-print('Initialized: ${SupabaseService.isInitialized}');
-print('Online: ${SupabaseService.isOnline}');
-print('Device ID: ${SupabaseService.deviceId}');
-
-// Sync durumu
-final syncService = ref.read(supabaseSyncServiceProvider);
-await syncService.resolveConflicts();
-```
-
-### Log Monitoring
-```bash
-# Console'da logları filtrele
-flutter logs | grep "SupabaseService"
-flutter logs | grep "OrderRepositoryImpl"
-flutter logs | grep "🔄"  # Sync operations
-flutter logs | grep "💥"  # Errors
-```
+### 2. Veritabanı Şeması
+`supabase_schema.sql` dosyasını Supabase Dashboard > SQL Editor'da çalıştırın.
 
 ## 📈 Performance Optimizasyonları
 
@@ -384,3 +223,59 @@ _logger.info('⏱️ Sync completed in ${stopwatch.elapsedMilliseconds}ms');
 **Son Güncelleme**: 2024-12-19  
 **Migration Versiyonu**: v2.0.0  
 **Durum**: ✅ Development Complete, Testing Phase 
+
+# Supabase Migration Guide
+
+Bu döküman, projenin Supabase entegrasyonu ve migration sürecini açıklar.
+
+## Mevcut Durum
+
+Uygulama şu anda **4 ana tablo** ile çalışmaktadır:
+
+### ✅ Aktif Tablolar
+1. **products** - Ürün bilgileri
+2. **orders** - Sipariş bilgileri
+3. **order_items** - Sipariş kalemleri
+4. **product_code_mappings** - Müşteri ürün kodu eşleştirme
+
+## Migration Adımları
+
+### 1. Supabase Proje Kurulumu
+```bash
+# Supabase CLI kurulumu
+npm install -g supabase
+
+# Proje başlatma
+supabase init
+```
+
+### 2. Veritabanı Şeması Oluşturma
+`supabase_schema.sql` dosyasını Supabase Dashboard > SQL Editor'da çalıştırın.
+
+### 3. Konfigürasyon
+`lib/core/config/supabase_config.dart` dosyasında:
+```dart
+static const String supabaseUrl = 'YOUR_SUPABASE_URL';
+static const String supabaseAnonKey = 'YOUR_SUPABASE_ANON_KEY';
+```
+
+### 4. RLS Politikaları
+Şu anda basit authenticated user politikası kullanılıyor. Gelecekte daha granüler politikalar eklenebilir.
+
+## Offline-First Yaklaşım
+
+- Tüm veriler önce SQLite'a yazılır
+- Supabase senkronizasyonu arka planda yapılır
+- İnternet bağlantısı olmadığında uygulama çalışmaya devam eder
+
+## Sync Stratejisi
+
+1. **Okuma**: Önce local, sonra remote'dan güncelleme
+2. **Yazma**: Önce local, sonra remote'a gönderim
+3. **Conflict Resolution**: Timestamp bazlı (son güncelleme kazanır)
+
+## Önemli Notlar
+
+- API maliyetlerini azaltmak için real-time özellikler sınırlı kullanılıyor
+- Gereksiz tablolar kaldırıldı (barcode_reads, deliveries, boxes vb.)
+- Test verileri schema'da mevcut 

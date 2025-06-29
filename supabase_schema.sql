@@ -48,63 +48,24 @@ CREATE TABLE IF NOT EXISTS product_code_mappings (
     UNIQUE(customer_product_code, customer_name)
 );
 
--- 5. Barcode Reads tablosu (Barkod Okuma Kayıtları)
-CREATE TABLE IF NOT EXISTS barcode_reads (
-    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-    product_id BIGINT REFERENCES products(id) ON DELETE SET NULL,
-    barcode TEXT NOT NULL,
-    read_at TIMESTAMPTZ DEFAULT NOW(),
-    device_id TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 6. Deliveries tablosu (Teslimatlar)
-CREATE TABLE IF NOT EXISTS deliveries (
-    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    order_id BIGINT NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
-    delivery_date TIMESTAMPTZ DEFAULT NOW(),
-    notes TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    updated_at TIMESTAMPTZ DEFAULT NOW()
-);
-
--- 7. Delivery Items tablosu (Teslimat Kalemleri)
-CREATE TABLE IF NOT EXISTS delivery_items (
-    id BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-    delivery_id BIGINT NOT NULL REFERENCES deliveries(id) ON DELETE CASCADE,
-    product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
-    quantity INTEGER NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(delivery_id, product_id)
-);
-
 -- Indexes for better performance
 CREATE INDEX IF NOT EXISTS idx_orders_status ON orders(status);
 CREATE INDEX IF NOT EXISTS idx_orders_customer ON orders(customer_name);
 CREATE INDEX IF NOT EXISTS idx_orders_created_at ON orders(created_at);
 CREATE INDEX IF NOT EXISTS idx_order_items_order_id ON order_items(order_id);
 CREATE INDEX IF NOT EXISTS idx_order_items_product_id ON order_items(product_id);
-CREATE INDEX IF NOT EXISTS idx_barcode_reads_order_id ON barcode_reads(order_id);
-CREATE INDEX IF NOT EXISTS idx_barcode_reads_barcode ON barcode_reads(barcode);
 
 -- Row Level Security (RLS) Policies
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
 ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE product_code_mappings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE barcode_reads ENABLE ROW LEVEL SECURITY;
-ALTER TABLE deliveries ENABLE ROW LEVEL SECURITY;
-ALTER TABLE delivery_items ENABLE ROW LEVEL SECURITY;
 
 -- Allow all operations for authenticated users (şimdilik basit policy)
 CREATE POLICY "Allow all for authenticated users" ON products FOR ALL TO authenticated USING (true);
 CREATE POLICY "Allow all for authenticated users" ON orders FOR ALL TO authenticated USING (true);
 CREATE POLICY "Allow all for authenticated users" ON order_items FOR ALL TO authenticated USING (true);
 CREATE POLICY "Allow all for authenticated users" ON product_code_mappings FOR ALL TO authenticated USING (true);
-CREATE POLICY "Allow all for authenticated users" ON barcode_reads FOR ALL TO authenticated USING (true);
-CREATE POLICY "Allow all for authenticated users" ON deliveries FOR ALL TO authenticated USING (true);
-CREATE POLICY "Allow all for authenticated users" ON delivery_items FOR ALL TO authenticated USING (true);
 
 -- Updated_at trigger function
 CREATE OR REPLACE FUNCTION update_updated_at_column()
@@ -126,9 +87,6 @@ CREATE TRIGGER update_order_items_updated_at BEFORE UPDATE ON order_items
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_product_code_mappings_updated_at BEFORE UPDATE ON product_code_mappings
-    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
-
-CREATE TRIGGER update_deliveries_updated_at BEFORE UPDATE ON deliveries
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 -- Sample test data

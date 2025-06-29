@@ -390,63 +390,6 @@ class SupabaseSyncService {
     }
   }
 
-  /// Barkod okuma verilerini Supabase'e gönderir
-  Future<void> pushBarcodeReadToSupabase({
-    required String orderCode,
-    required String barcode,
-    required int? productId,
-    required int scannedQuantity,
-  }) async {
-    if (!SupabaseService.isOnline) {
-      _logger
-          .warning('⚠️ Offline durumda - barkod okuma sync kuyruğuna eklendi');
-      // TODO: Sync kuyruğuna ekle
-      return;
-    }
-
-    try {
-      _logger.info('📤 Barkod okuma Supabase\'e gönderiliyor: $barcode');
-
-      // Önce siparişin ID'sini bul
-      final orderResponse = await _supabaseClient
-          .from('orders')
-          .select('id')
-          .eq('order_code', orderCode)
-          .single();
-
-      final orderId = orderResponse['id'];
-
-      // Barkod okuma kaydını oluştur
-      final barcodeReadData = {
-        'order_id': orderId,
-        'product_id': productId,
-        'barcode': barcode,
-        'read_at': DateTime.now().toIso8601String(),
-        'device_id': SupabaseService.deviceId,
-      };
-
-      await _supabaseClient.from('barcode_reads').insert(barcodeReadData);
-
-      // Eğer productId varsa, sipariş kalemi güncelle
-      if (productId != null) {
-        await _supabaseClient
-            .from('order_items')
-            .update({
-              'scanned_quantity': scannedQuantity,
-              'updated_at': DateTime.now().toIso8601String(),
-            })
-            .eq('order_id', orderId)
-            .eq('product_id', productId);
-      }
-
-      _logger.info('✅ Barkod okuma başarıyla Supabase\'e gönderildi: $barcode');
-    } catch (e, stackTrace) {
-      _logger.severe(
-          '💥 Barkod okuma Supabase\'e gönderme hatası', e, stackTrace);
-      rethrow;
-    }
-  }
-
   /// Conflict resolution - hangisi daha güncel ise o kullanılır
   Future<void> resolveConflicts() async {
     try {
@@ -537,3 +480,65 @@ class SupabaseSyncService {
     _logger.info('🔴 Realtime subscription kaldırıldı');
   }
 }
+
+
+
+
+// API MALIYETLERINDEN DOLAYI KAPATILAN OZELLIKLER
+
+ /// Barkod okuma verilerini Supabase'e gönderir
+  // Future<void> pushBarcodeReadToSupabase({
+  //   required String orderCode,
+  //   required String barcode,
+  //   required int? productId,
+  //   required int scannedQuantity,
+  // }) async {
+  //   if (!SupabaseService.isOnline) {
+  //     _logger
+  //         .warning('⚠️ Offline durumda - barkod okuma sync kuyruğuna eklendi');
+  //     // TODO: Sync kuyruğuna ekle
+  //     return;
+  //   }
+
+  //   try {
+  //     _logger.info('📤 Barkod okuma Supabase\'e gönderiliyor: $barcode');
+
+  //     // Önce siparişin ID'sini bul
+  //     final orderResponse = await _supabaseClient
+  //         .from('orders')
+  //         .select('id')
+  //         .eq('order_code', orderCode)
+  //         .single();
+
+  //     final orderId = orderResponse['id'];
+
+  //     // Barkod okuma kaydını oluştur
+  //     final barcodeReadData = {
+  //       'order_id': orderId,
+  //       'product_id': productId,
+  //       'barcode': barcode,
+  //       'read_at': DateTime.now().toIso8601String(),
+  //       'device_id': SupabaseService.deviceId,
+  //     };
+
+  //     await _supabaseClient.from('barcode_reads').insert(barcodeReadData);
+
+  //     // Eğer productId varsa, sipariş kalemi güncelle
+  //     if (productId != null) {
+  //       await _supabaseClient
+  //           .from('order_items')
+  //           .update({
+  //             'scanned_quantity': scannedQuantity,
+  //             'updated_at': DateTime.now().toIso8601String(),
+  //           })
+  //           .eq('order_id', orderId)
+  //           .eq('product_id', productId);
+  //     }
+
+  //     _logger.info('✅ Barkod okuma başarıyla Supabase\'e gönderildi: $barcode');
+  //   } catch (e, stackTrace) {
+  //     _logger.severe(
+  //         '💥 Barkod okuma Supabase\'e gönderme hatası', e, stackTrace);
+  //     rethrow;
+  //   }
+  // }

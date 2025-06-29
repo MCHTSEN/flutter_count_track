@@ -330,30 +330,31 @@ class OrderNotifier extends StateNotifier<OrderState> {
       await _repository.updateOrderItemScannedQuantity(
           orderItemId, newQuantity);
 
-      // Supabase'e barkod okuma kaydını gönder (background)
-      if (_syncService != null &&
-          SupabaseService.isOnline &&
-          activeOrderCode != null) {
-        try {
-          // Order item'dan product ID'yi ve barkod'u al
-          final orderItem = await _repository.getOrderItemById(orderItemId);
-          if (orderItem != null) {
-            final product =
-                await _repository.getProductById(orderItem.productId);
-            if (product != null) {
-              await _syncService.pushBarcodeReadToSupabase(
-                orderCode: activeOrderCode,
-                barcode: product.barcode,
-                productId: product.id,
-                scannedQuantity: newQuantity,
-              );
-              _logger.info('✅ Barkod okuma Supabase\'e gönderildi');
-            }
-          }
-        } catch (e) {
-          _logger.warning('⚠️ Barkod okuma Supabase\'e gönderilemedi', e);
-        }
-      }
+      // API MALIYETLERINDEN DOLAYI KAPATILAN OZELLIKLER
+      // // Supabase'e barkod okuma kaydını gönder (background)
+      // if (_syncService != null &&
+      //     SupabaseService.isOnline &&
+      //     activeOrderCode != null) {
+      //   try {
+      //     // Order item'dan product ID'yi ve barkod'u al
+      //     final orderItem = await _repository.getOrderItemById(orderItemId);
+      //     if (orderItem != null) {
+      //       final product =
+      //           await _repository.getProductById(orderItem.productId);
+      //       if (product != null) {
+      //         await _syncService.pushBarcodeReadToSupabase(
+      //           orderCode: activeOrderCode,
+      //           barcode: product.barcode,
+      //           productId: product.id,
+      //           scannedQuantity: newQuantity,
+      //         );
+      //         _logger.info('✅ Barkod okuma Supabase\'e gönderildi');
+      //       }
+      //     }
+      //   } catch (e) {
+      //     _logger.warning('⚠️ Barkod okuma Supabase\'e gönderilemedi', e);
+      //   }
+      // }
 
       await loadOrders();
       if (activeOrderCode != null &&
